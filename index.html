@@ -43,6 +43,7 @@
       <section class="summary-card" aria-label="Tagesübersicht">
         <p class="summary-label">Gesamt</p>
         <p class="summary-total"><span id="totalKcal">0</span> <span class="summary-unit">kcal</span></p>
+        <p class="summary-subtotal"><span id="totalProtein">0</span> <span class="summary-unit">g Eiweiß</span></p>
         <p class="summary-meta" id="entryCount">0 Einträge</p>
       </section>
 
@@ -58,6 +59,7 @@
             <tr>
               <th>Datum</th>
               <th class="num">kcal</th>
+              <th class="num">g Eiweiß</th>
               <th class="num">Einträge</th>
             </tr>
           </thead>
@@ -95,12 +97,18 @@
 
       <label class="field">
         <span>Bezeichnung</span>
-        <input type="text" id="foodName" placeholder="z.B. Haferflocken" required autocomplete="off">
+        <input type="text" id="foodName" placeholder="z.B. Haferflocken" required autocomplete="off" aria-autocomplete="list" aria-controls="foodSearchResults" aria-expanded="false">
+        <div class="search-results hidden" id="foodSearchResults" role="listbox" aria-label="Lebensmittelvorschläge"></div>
       </label>
 
       <label class="field">
         <span>Kalorien (kcal)</span>
         <input type="number" id="foodKcal" placeholder="350" min="1" max="10000" required inputmode="numeric">
+      </label>
+
+      <label class="field">
+        <span>Eiweiß (g)</span>
+        <input type="number" id="foodProtein" placeholder="25" min="0" max="1000" required inputmode="numeric" step="0.1">
       </label>
 
       <div class="modal-actions">

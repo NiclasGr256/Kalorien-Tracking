@@ -1,4 +1,7 @@
 const STORAGE_KEY = 'kalorien-tracker-v1';
+const DB_NAME = 'kalorien-tracker';
+const DB_VERSION = 1;
+const DB_STORE = 'days';
 const MEAL_ORDER = ['frühstück', 'mittag', 'abend', 'snack'];
 const MEAL_LABELS = {
   frühstück: 'Frühstück',
@@ -13,6 +16,98 @@ let currentView = 'tracking';
 let selectedDate = startOfDay(new Date());
 /** @type {string|null} */
 let editingEntryId = null;
+
+async function openDb() {
+  if (!window.indexedDB) return null;
+
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+    request.onblocked = () => {
+      console.warn('IndexedDB open blocked');
+    };
+
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains(DB_STORE)) {
+        db.createObjectStore(DB_STORE, { keyPath: 'date' });
+      }
+    };
+  });
+}
+
+function loadFromLocalStorage() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || { days: {} };
+  } catch {
+    return { days: {} };
+  }
+}
+
+function saveToLocalStorage(data) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch (error) {
+    console.warn('LocalStorage save failed', error);
+  }
+}
+
+async function loadData() {
+  const localData = loadFromLocalStorage();
+
+  try {
+    const db = await openDb();
+    if (!db) return localData;
+
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(DB_STORE, 'readonly');
+      const store = tx.objectStore(DB_STORE);
+      const request = store.getAll();
+
+      request.onsuccess = () => {
+        const days = {};
+        for (const record of request.result) {
+          days[record.date] = record.entries;
+        }
+        resolve({ days: Object.keys(days).length ? days : localData.days });
+      };
+
+      request.onerror = () => reject(request.error);
+    });
+  } catch (error) {
+    console.warn('IndexedDB load failed, falling back to localStorage', error);
+    return localData;
+  }
+}
+
+async function saveData(data) {
+  saveToLocalStorage(data);
+
+  try {
+    const db = await openDb();
+    if (!db) return;
+
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(DB_STORE, 'readwrite');
+      const store = tx.objectStore(DB_STORE);
+
+      store.clear();
+      for (const [date, entries] of Object.entries(data.days)) {
+        if (entries.length > 0) {
+          store.put({ date, entries });
+        }
+      }
+
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  } catch (error) {
+    console.warn('IndexedDB save failed', error);
+  }
+}
 
 // DOM
 const menuBtn = document.getElementById('menuBtn');
@@ -38,8 +133,15 @@ const entryForm = document.getElementById('entryForm');
 const mealSelect = document.getElementById('mealSelect');
 const foodName = document.getElementById('foodName');
 const foodKcal = document.getElementById('foodKcal');
+const foodProtein = document.getElementById('foodProtein');
+const foodSearchResults = document.getElementById('foodSearchResults');
+const totalProteinEl = document.getElementById('totalProtein');
 const cancelEntry = document.getElementById('cancelEntry');
 const appEl = document.getElementById('app');
+const FOOD_SEARCH_MIN = 3;
+const SEARCH_DEBOUNCE = 300;
+let searchTimeout = null;
+let searchAbortController = null;
 
 function startOfDay(d) {
   const copy = new Date(d);
@@ -67,20 +169,119 @@ function isFuture(d) {
   return d > startOfDay(new Date());
 }
 
-function loadData() {
+function getDayEntries(data, key) {
+  return data.days[key] || [];
+}
+
+async function searchFood(query) {
+  if (!query || query.length < FOOD_SEARCH_MIN) return [];
+
+  if (searchAbortController) {
+    searchAbortController.abort();
+  }
+
+  searchAbortController = new AbortController();
+  const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=8`;
+
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || { days: {} };
-  } catch {
-    return { days: {} };
+    const response = await fetch(url, { signal: searchAbortController.signal });
+    if (!response.ok) return [];
+
+    const data = await response.json();
+    return (data.products || [])
+      .map((product) => {
+        const nutriments = product.nutriments || {};
+        const kcal = nutriments['energy-kcal_serving'] ?? nutriments['energy-kcal_100g'] ?? nutriments['energy_100g'] ?? nutriments['energy-kcal'];
+        const protein = nutriments['proteins_serving'] ?? nutriments['proteins_100g'] ?? nutriments['proteins'];
+        const portionLabel = nutriments['energy-kcal_serving'] ? product.serving_size || 'Portion' : '100 g';
+
+        return {
+          name: product.product_name || product.generic_name || product.brands || 'Unbekanntes Produkt',
+          brand: product.brands || '',
+          kcal: kcal != null ? Number(kcal) : null,
+          protein: protein != null ? Number(protein) : null,
+          portionLabel,
+        };
+      })
+      .filter((item) => item.name);
+  } catch (error) {
+    if (error.name === 'AbortError') return [];
+    console.warn('Food search failed', error);
+    return [];
   }
 }
 
-function saveData(data) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+function renderSearchResults(results) {
+  foodSearchResults.innerHTML = '';
+
+  if (!results.length) {
+    foodSearchResults.classList.add('hidden');
+    foodName.setAttribute('aria-expanded', 'false');
+    return;
+  }
+
+  foodSearchResults.classList.remove('hidden');
+  foodName.setAttribute('aria-expanded', 'true');
+
+  for (const result of results) {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'search-result-item';
+    item.innerHTML = `
+      <div class="search-result-title">${escapeHtml(result.name)}</div>
+      <div class="search-result-meta">${result.brand ? `${escapeHtml(result.brand)} · ` : ''}${result.kcal != null ? `${Math.round(result.kcal)} kcal` : 'Keine kcal'}${result.protein != null ? ` · ${result.protein.toFixed(1)} g Eiweiß` : ''}${result.portionLabel ? ` · ${escapeHtml(result.portionLabel)}` : ''}</div>
+    `;
+    item.addEventListener('click', () => {
+      fillFoodFromSuggestion(result);
+    });
+    foodSearchResults.appendChild(item);
+  }
 }
 
-function getDayEntries(data, key) {
-  return data.days[key] || [];
+function clearSearchResults() {
+  if (searchTimeout) {
+    clearTimeout(searchTimeout);
+    searchTimeout = null;
+  }
+
+  if (searchAbortController) {
+    searchAbortController.abort();
+    searchAbortController = null;
+  }
+
+  foodSearchResults.innerHTML = '';
+  foodSearchResults.classList.add('hidden');
+  foodName.setAttribute('aria-expanded', 'false');
+}
+
+function fillFoodFromSuggestion(result) {
+  foodName.value = result.name;
+  if (result.kcal != null) foodKcal.value = String(Math.round(result.kcal));
+  if (result.protein != null) foodProtein.value = String(result.protein.toFixed(1));
+  clearSearchResults();
+}
+
+function handleFoodNameInput() {
+  const query = foodName.value.trim();
+  if (query.length < FOOD_SEARCH_MIN) {
+    clearSearchResults();
+    return;
+  }
+
+  if (searchTimeout) {
+    clearTimeout(searchTimeout);
+  }
+
+  searchTimeout = setTimeout(async () => {
+    const results = await searchFood(query);
+    renderSearchResults(results);
+  }, SEARCH_DEBOUNCE);
+}
+
+function handleFoodNameKeyDown(event) {
+  if (event.key === 'Escape') {
+    clearSearchResults();
+  }
 }
 
 function formatDateLabel(d) {
@@ -108,6 +309,14 @@ function sumKcal(entries) {
   return entries.reduce((sum, e) => sum + e.kcal, 0);
 }
 
+function sumProtein(entries) {
+  return entries.reduce((sum, e) => sum + (Number(e.protein) || 0), 0);
+}
+
+function getEntryProtein(entry) {
+  return Number(entry.protein) || 0;
+}
+
 function formatEntryCount(count) {
   return count === 1 ? '1 Eintrag' : `${count} Einträge`;
 }
@@ -124,7 +333,7 @@ function closeNav() {
   menuBtn.setAttribute('aria-expanded', 'false');
 }
 
-function setView(view) {
+async function setView(view) {
   currentView = view;
   const isTracking = view === 'tracking';
 
@@ -141,23 +350,25 @@ function setView(view) {
 
   location.hash = view === 'history' ? '#/history' : '#/';
 
-  if (isTracking) renderTracking();
-  else renderHistory();
+  if (isTracking) await renderTracking();
+  else await renderHistory();
 
   closeNav();
 }
 
-function renderTracking() {
-  const data = loadData();
+async function renderTracking() {
+  const data = await loadData();
   const key = dateKey(selectedDate);
   const entries = getDayEntries(data, key);
   const total = sumKcal(entries);
+  const totalProtein = sumProtein(entries);
 
   dateLabel.textContent = formatDateLabel(selectedDate);
   dateSub.textContent = formatDateSub(selectedDate);
   nextDayBtn.disabled = isFuture(startOfDay(new Date(selectedDate.getTime() + 86400000)));
 
   totalKcalEl.textContent = total.toLocaleString('de-DE');
+  totalProteinEl.textContent = totalProtein.toLocaleString('de-DE');
   entryCountEl.textContent = formatEntryCount(entries.length);
 
   mealsList.innerHTML = '';
@@ -172,7 +383,7 @@ function renderTracking() {
 
     const header = document.createElement('div');
     header.className = 'meal-header';
-    header.innerHTML = `<h3>${MEAL_LABELS[meal]}</h3><span class="meal-total">${sumKcal(items)} kcal</span>`;
+    header.innerHTML = `<h3>${MEAL_LABELS[meal]}</h3><span class="meal-total">${sumKcal(items)} kcal · ${sumProtein(items)} g</span>`;
     group.appendChild(header);
 
     for (const entry of items) {
@@ -185,13 +396,14 @@ function renderTracking() {
   emptyState.classList.toggle('hidden', entries.length > 0);
 }
 
-function renderHistory() {
-  const data = loadData();
+async function renderHistory() {
+  const data = await loadData();
   const rows = Object.entries(data.days)
     .filter(([, entries]) => entries.length > 0)
     .map(([key, entries]) => ({
       key,
       total: sumKcal(entries),
+      protein: sumProtein(entries),
       count: entries.length,
     }))
     .sort((a, b) => b.key.localeCompare(a.key));
@@ -204,6 +416,7 @@ function renderHistory() {
     tr.innerHTML = `
       <td>${escapeHtml(formatTableDate(row.key))}</td>
       <td class="num">${row.total.toLocaleString('de-DE')}</td>
+      <td class="num">${row.protein.toLocaleString('de-DE')}</td>
       <td class="num">${row.count}</td>
     `;
     tr.addEventListener('click', () => goToDay(row.key));
@@ -221,7 +434,7 @@ function renderHistory() {
 
 function goToDay(key) {
   selectedDate = parseDateKey(key);
-  setView('tracking');
+  void setView('tracking');
 }
 
 function groupByMeal(entries) {
@@ -238,7 +451,10 @@ function createEntryEl(entry) {
   el.className = 'entry';
   el.innerHTML = `
     <div class="entry-info">
-      <div class="entry-name">${escapeHtml(entry.name)}</div>
+      <div class="entry-main">
+        <div class="entry-name">${escapeHtml(entry.name)}</div>
+        <div class="entry-subtext">${entry.kcal} kcal · ${getEntryProtein(entry)} g Eiweiß</div>
+      </div>
     </div>
     <span class="entry-kcal">${entry.kcal}</span>
     <div class="entry-actions">
@@ -265,6 +481,8 @@ function openAddModal() {
   mealSelect.value = guessMealByTime();
   foodName.value = '';
   foodKcal.value = '';
+  foodProtein.value = '';
+  clearSearchResults();
   entryModal.showModal();
   setTimeout(() => foodName.focus(), 100);
 }
@@ -275,6 +493,8 @@ function openEditModal(entry) {
   mealSelect.value = entry.meal;
   foodName.value = entry.name;
   foodKcal.value = String(entry.kcal);
+  foodProtein.value = String(entry.protein ?? 0);
+  clearSearchResults();
   entryModal.showModal();
   setTimeout(() => foodName.focus(), 100);
 }
@@ -287,42 +507,44 @@ function guessMealByTime() {
   return 'snack';
 }
 
-function saveEntry(e) {
+async function saveEntry(e) {
   e.preventDefault();
   const name = foodName.value.trim();
   const kcal = parseInt(foodKcal.value, 10);
-  if (!name || !kcal || kcal < 1) return;
+  const protein = parseFloat(foodProtein.value) || 0;
+  if (!name || !kcal || kcal < 1 || protein < 0) return;
 
-  const data = loadData();
+  const data = await loadData();
   const key = dateKey(selectedDate);
   if (!data.days[key]) data.days[key] = [];
 
   if (editingEntryId) {
     const idx = data.days[key].findIndex((x) => x.id === editingEntryId);
     if (idx !== -1) {
-      data.days[key][idx] = { ...data.days[key][idx], name, kcal, meal: mealSelect.value };
+      data.days[key][idx] = { ...data.days[key][idx], name, kcal, protein, meal: mealSelect.value };
     }
   } else {
     data.days[key].push({
       id: crypto.randomUUID(),
       name,
       kcal,
+      protein,
       meal: mealSelect.value,
       createdAt: Date.now(),
     });
   }
 
-  saveData(data);
+  await saveData(data);
   entryModal.close();
-  renderTracking();
+  await renderTracking();
 }
 
-function deleteEntry(id) {
-  const data = loadData();
+async function deleteEntry(id) {
+  const data = await loadData();
   const key = dateKey(selectedDate);
   data.days[key] = (data.days[key] || []).filter((e) => e.id !== id);
-  saveData(data);
-  renderTracking();
+  await saveData(data);
+  await renderTracking();
 }
 
 function initFromHash() {
@@ -338,27 +560,40 @@ menuBtn.addEventListener('click', () => {
 navBackdrop.addEventListener('click', closeNav);
 
 navDrawer.querySelectorAll('.nav-item').forEach((btn) => {
-  btn.addEventListener('click', () => setView(/** @type {'tracking' | 'history'} */ (btn.dataset.view)));
+  btn.addEventListener('click', () => {
+    void setView(/** @type {'tracking' | 'history'} */ (btn.dataset.view));
+  });
 });
 
-prevDayBtn.addEventListener('click', () => {
+prevDayBtn.addEventListener('click', async () => {
   selectedDate.setDate(selectedDate.getDate() - 1);
-  renderTracking();
+  await renderTracking();
 });
 
-nextDayBtn.addEventListener('click', () => {
+nextDayBtn.addEventListener('click', async () => {
   if (nextDayBtn.disabled) return;
   selectedDate.setDate(selectedDate.getDate() + 1);
-  renderTracking();
+  await renderTracking();
 });
 
 addBtn.addEventListener('click', openAddModal);
 entryForm.addEventListener('submit', saveEntry);
 cancelEntry.addEventListener('click', () => entryModal.close());
 
+foodName.addEventListener('input', handleFoodNameInput);
+foodName.addEventListener('keydown', handleFoodNameKeyDown);
+
+document.addEventListener('click', (event) => {
+  if (!foodSearchResults.contains(event.target) && event.target !== foodName) {
+    clearSearchResults();
+  }
+});
+
 entryModal.addEventListener('click', (e) => {
   if (e.target === entryModal) entryModal.close();
 });
+
+entryModal.addEventListener('close', clearSearchResults);
 
 window.addEventListener('hashchange', initFromHash);
 
