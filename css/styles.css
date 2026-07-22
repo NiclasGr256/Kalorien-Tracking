@@ -553,6 +553,11 @@ body {
   background: rgba(255, 255, 255, 0.04);
 }
 
+.search-result-empty {
+  cursor: default;
+  color: var(--text-muted);
+}
+
 .search-result-title {
   font-weight: 600;
 }

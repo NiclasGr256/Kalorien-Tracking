@@ -140,6 +140,7 @@ const cancelEntry = document.getElementById('cancelEntry');
 const appEl = document.getElementById('app');
 const FOOD_SEARCH_MIN = 3;
 const SEARCH_DEBOUNCE = 300;
+const SEARCH_PAGE_SIZE = 20;
 let searchTimeout = null;
 let searchAbortController = null;
 
@@ -181,7 +182,7 @@ async function searchFood(query) {
   }
 
   searchAbortController = new AbortController();
-  const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=8`;
+  const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=${SEARCH_PAGE_SIZE}`;
 
   try {
     const response = await fetch(url, { signal: searchAbortController.signal });
@@ -215,8 +216,12 @@ function renderSearchResults(results) {
   foodSearchResults.innerHTML = '';
 
   if (!results.length) {
-    foodSearchResults.classList.add('hidden');
-    foodName.setAttribute('aria-expanded', 'false');
+    const emptyItem = document.createElement('div');
+    emptyItem.className = 'search-result-item search-result-empty';
+    emptyItem.textContent = 'Keine Vorschläge gefunden';
+    foodSearchResults.appendChild(emptyItem);
+    foodSearchResults.classList.remove('hidden');
+    foodName.setAttribute('aria-expanded', 'true');
     return;
   }
 
