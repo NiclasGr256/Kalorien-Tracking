@@ -120,8 +120,22 @@ async function loadData() {
   if (isSupabaseConfigured()) {
     try {
       const [entriesRows, foodsRows] = await Promise.all([
-        supabaseRequest('/entries?select=id,date,meal,name,kcal,protein,carbs,fat,weight_grams,created_at&order=created_at.asc'),
-        supabaseRequest('/custom_foods?select=id,name,weight_grams,kcal,protein,carbs,fat'),
+        (async () => {
+          try {
+            return await supabaseRequest('/entries?select=id,date,meal,name,kcal,protein,carbs,fat,fiber,weight_grams,created_at&order=created_at.asc');
+          } catch (error) {
+            console.warn('Falling back to entries without fiber column', error);
+            return await supabaseRequest('/entries?select=id,date,meal,name,kcal,protein,carbs,fat,weight_grams,created_at&order=created_at.asc');
+          }
+        })(),
+        (async () => {
+          try {
+            return await supabaseRequest('/custom_foods?select=id,name,weight_grams,kcal,protein,carbs,fat,fiber');
+          } catch (error) {
+            console.warn('Falling back to custom foods without fiber column', error);
+            return await supabaseRequest('/custom_foods?select=id,name,weight_grams,kcal,protein,carbs,fat');
+          }
+        })(),
       ]);
 
       const days = {};
@@ -136,6 +150,7 @@ async function loadData() {
           protein: Number(row.protein) || 0,
           carbs: Number(row.carbs) || 0,
           fat: Number(row.fat) || 0,
+          fiber: Number(row.fiber) || 0,
           weightGrams: Number(row.weight_grams) || 0,
           meal: row.meal || 'snack',
           createdAt: row.created_at ? Date.parse(row.created_at) : Date.now(),
@@ -151,6 +166,7 @@ async function loadData() {
             protein: Number(row.protein) || 0,
             carbs: Number(row.carbs) || 0,
             fat: Number(row.fat) || 0,
+            fiber: Number(row.fiber) || 0,
           }))
         : [];
 
@@ -237,6 +253,7 @@ async function saveData(data) {
           protein: Number(entry.protein) || 0,
           carbs: Number(entry.carbs) || 0,
           fat: Number(entry.fat) || 0,
+          fiber: Number(entry.fiber) || 0,
           weight_grams: Number(entry.weightGrams) || 0,
           created_at: entry.createdAt ? new Date(entry.createdAt).toISOString() : new Date().toISOString(),
         }))
@@ -265,6 +282,7 @@ async function saveData(data) {
         protein: Number(food.protein) || 0,
         carbs: Number(food.carbs) || 0,
         fat: Number(food.fat) || 0,
+        fiber: Number(food.fiber) || 0,
       }));
 
       if (customFoodsPayload.length) {
@@ -351,6 +369,7 @@ const customFoodKcal = document.getElementById('customFoodKcal');
 const customFoodProtein = document.getElementById('customFoodProtein');
 const customFoodCarbs = document.getElementById('customFoodCarbs');
 const customFoodFat = document.getElementById('customFoodFat');
+const customFoodFiber = document.getElementById('customFoodFiber');
 const customFoodList = document.getElementById('customFoodList');
 const foodName = document.getElementById('foodName');
 const foodWeight = document.getElementById('foodWeight');
@@ -358,6 +377,7 @@ const foodKcal = document.getElementById('foodKcal');
 const foodProtein = document.getElementById('foodProtein');
 const foodCarbs = document.getElementById('foodCarbs');
 const foodFat = document.getElementById('foodFat');
+const foodFiber = document.getElementById('foodFiber');
 const foodSearchResults = document.getElementById('foodSearchResults');
 const totalProteinEl = document.getElementById('totalProtein');
 const totalMacrosEl = document.getElementById('totalMacros');
@@ -426,6 +446,7 @@ async function searchFood(query) {
         protein: Number(food.protein) || 0,
         carbs: Number(food.carbs) || 0,
         fat: Number(food.fat) || 0,
+        fiber: Number(food.fiber) || 0,
         portionLabel: `${food.weightGrams || 100} g`,
         isCustomFood: true,
       }));
@@ -437,6 +458,7 @@ async function searchFood(query) {
         const protein = nutriments['proteins_serving'] ?? nutriments['proteins_100g'] ?? nutriments['proteins'];
         const carbs = nutriments['carbohydrates_serving'] ?? nutriments['carbohydrates_100g'] ?? nutriments['carbohydrates'];
         const fat = nutriments['fat_serving'] ?? nutriments['fat_100g'] ?? nutriments['fat'];
+        const fiber = nutriments['fiber_serving'] ?? nutriments['fiber_100g'] ?? nutriments['fiber'];
         const portionLabel = nutriments['energy-kcal_serving'] ? product.serving_size || 'Portion' : '100 g';
 
         return {
@@ -446,6 +468,7 @@ async function searchFood(query) {
           protein: protein != null ? Number(protein) : null,
           carbs: carbs != null ? Number(carbs) : null,
           fat: fat != null ? Number(fat) : null,
+          fiber: fiber != null ? Number(fiber) : null,
           portionLabel,
         };
       })
@@ -481,7 +504,7 @@ function renderSearchResults(results) {
     item.className = 'search-result-item';
     item.innerHTML = `
       <div class="search-result-title">${escapeHtml(result.name)}</div>
-      <div class="search-result-meta">${result.brand ? `${escapeHtml(result.brand)} · ` : ''}${result.kcal != null ? `${Math.round(result.kcal)} kcal` : 'Keine kcal'}${result.protein != null ? ` · ${result.protein.toFixed(1)} g Eiweiß` : ''}${result.carbs != null ? ` · ${result.carbs.toFixed(1)} g K` : ''}${result.fat != null ? ` · ${result.fat.toFixed(1)} g F` : ''}${result.portionLabel ? ` · ${escapeHtml(result.portionLabel)}` : ''}</div>
+      <div class="search-result-meta">${result.brand ? `${escapeHtml(result.brand)} · ` : ''}${result.kcal != null ? `${Math.round(result.kcal)} kcal` : 'Keine kcal'}${result.protein != null ? ` · ${result.protein.toFixed(1)} g Eiweiß` : ''}${result.carbs != null ? ` · ${result.carbs.toFixed(1)} g K` : ''}${result.fat != null ? ` · ${result.fat.toFixed(1)} g F` : ''}${result.fiber != null ? ` · ${result.fiber.toFixed(1)} g Ballaststoffe` : ''}${result.portionLabel ? ` · ${escapeHtml(result.portionLabel)}` : ''}</div>
     `;
     item.addEventListener('click', () => {
       fillFoodFromSuggestion(result);
@@ -521,6 +544,7 @@ function applySelectedFoodNutrition() {
   foodProtein.value = selectedFoodBaseNutrition.protein != null ? String((selectedFoodBaseNutrition.protein * factor).toFixed(1)) : '';
   foodCarbs.value = selectedFoodBaseNutrition.carbs != null ? String((selectedFoodBaseNutrition.carbs * factor).toFixed(1)) : '';
   foodFat.value = selectedFoodBaseNutrition.fat != null ? String((selectedFoodBaseNutrition.fat * factor).toFixed(1)) : '';
+  foodFiber.value = selectedFoodBaseNutrition.fiber != null ? String((selectedFoodBaseNutrition.fiber * factor).toFixed(1)) : '';
 }
 
 function fillFoodFromSuggestion(result) {
@@ -530,6 +554,7 @@ function fillFoodFromSuggestion(result) {
     protein: result.protein != null ? result.protein : 0,
     carbs: result.carbs != null ? result.carbs : 0,
     fat: result.fat != null ? result.fat : 0,
+    fiber: result.fiber != null ? result.fiber : 0,
   };
   foodWeight.value = '100';
   applySelectedFoodNutrition();
@@ -612,6 +637,10 @@ function getEntryCarbs(entry) {
 
 function getEntryFat(entry) {
   return Number(entry.fat) || 0;
+}
+
+function getEntryFiber(entry) {
+  return Number(entry.fiber) || 0;
 }
 
 function formatEntryCount(count) {
@@ -752,7 +781,7 @@ async function renderCustomFoods() {
       <div>
         <h3>${escapeHtml(food.name)}</h3>
         <p>${food.weightGrams || 100} g · ${Number(food.kcal) || 0} kcal</p>
-        <p>P ${Number(food.protein) || 0} g · F ${Number(food.fat) || 0} g · K ${Number(food.carbs) || 0} g</p>
+        <p>P ${Number(food.protein) || 0} g · F ${Number(food.fat) || 0} g · K ${Number(food.carbs) || 0} g · B ${Number(food.fiber) || 0} g</p>
       </div>
       <button type="button" data-delete="${food.id}">Entfernen</button>
     `;
@@ -819,7 +848,7 @@ function createEntryEl(entry) {
     <div class="entry-info">
       <div class="entry-main">
         <div class="entry-name">${escapeHtml(entry.name)}</div>
-        <div class="entry-subtext">${entry.kcal} kcal · P ${getEntryProtein(entry)} g · F ${getEntryFat(entry)} g · K ${getEntryCarbs(entry)} g</div>
+        <div class="entry-subtext">${entry.kcal} kcal · P ${getEntryProtein(entry)} g · F ${getEntryFat(entry)} g · K ${getEntryCarbs(entry)} g · B ${getEntryFiber(entry)} g</div>
       </div>
     </div>
     <span class="entry-kcal">${entry.kcal}</span>
@@ -851,6 +880,7 @@ function openAddModal() {
   foodProtein.value = '';
   foodCarbs.value = '';
   foodFat.value = '';
+  foodFiber.value = '';
   selectedFoodBaseNutrition = null;
   clearSearchResults();
   entryModal.showModal();
@@ -867,6 +897,7 @@ function openEditModal(entry) {
   foodProtein.value = String(entry.protein ?? 0);
   foodCarbs.value = String(entry.carbs ?? 0);
   foodFat.value = String(entry.fat ?? 0);
+  foodFiber.value = String(entry.fiber ?? 0);
   selectedFoodBaseNutrition = null;
   clearSearchResults();
   entryModal.showModal();
@@ -888,8 +919,9 @@ async function saveEntry(e) {
   const protein = parseFloat(foodProtein.value) || 0;
   const carbs = parseFloat(foodCarbs.value) || 0;
   const fat = parseFloat(foodFat.value) || 0;
+  const fiber = parseFloat(foodFiber.value) || 0;
   const weightGrams = parseInt(foodWeight.value, 10) || 0;
-  if (!name || !kcal || kcal < 1 || protein < 0 || carbs < 0 || fat < 0) return;
+  if (!name || !kcal || kcal < 1 || protein < 0 || carbs < 0 || fat < 0 || fiber < 0) return;
 
   const data = await loadData();
   const key = dateKey(selectedDate);
@@ -898,7 +930,7 @@ async function saveEntry(e) {
   if (editingEntryId) {
     const idx = data.days[key].findIndex((x) => x.id === editingEntryId);
     if (idx !== -1) {
-      data.days[key][idx] = { ...data.days[key][idx], name, kcal, protein, carbs, fat, weightGrams, meal: mealSelect.value };
+      data.days[key][idx] = { ...data.days[key][idx], name, kcal, protein, carbs, fat, fiber, weightGrams, meal: mealSelect.value };
     }
   } else {
     data.days[key].push({
@@ -908,6 +940,7 @@ async function saveEntry(e) {
       protein,
       carbs,
       fat,
+      fiber,
       weightGrams,
       meal: mealSelect.value,
       createdAt: Date.now(),
@@ -944,13 +977,14 @@ async function saveCustomFood(event) {
   const protein = parseFloat(customFoodProtein.value) || 0;
   const carbs = parseFloat(customFoodCarbs.value) || 0;
   const fat = parseFloat(customFoodFat.value) || 0;
+  const fiber = parseFloat(customFoodFiber.value) || 0;
 
-  if (!name || kcal < 0 || protein < 0 || carbs < 0 || fat < 0) return;
+  if (!name || kcal < 0 || protein < 0 || carbs < 0 || fat < 0 || fiber < 0) return;
 
   const data = await loadData();
   data.customFoods = data.customFoods || [];
   const id = crypto.randomUUID();
-  const newFood = { id, name, weightGrams, kcal, protein, carbs, fat };
+  const newFood = { id, name, weightGrams, kcal, protein, carbs, fat, fiber };
   data.customFoods.push(newFood);
 
   console.debug('saveCustomFood: saving', newFood);
