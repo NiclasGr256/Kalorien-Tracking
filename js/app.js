@@ -223,6 +223,7 @@ async function loadData() {
 async function saveData(data) {
   const normalizedData = normalizeData(data);
   saveToLocalStorage(normalizedData);
+  console.debug('saveData: saved to localStorage', { customFoodsCount: (normalizedData.customFoods||[]).length });
 
   if (isSupabaseConfigured()) {
     try {
@@ -268,11 +269,15 @@ async function saveData(data) {
 
       if (customFoodsPayload.length) {
         for (const food of customFoodsPayload) {
+          console.debug('saveData: upserting custom food', food.id, food);
           try {
-            await supabaseRequest('/custom_foods?on_conflict=id', { method: 'POST', body: [food] });
+            const res = await supabaseRequest('/custom_foods?on_conflict=id', { method: 'POST', body: [food] });
+            console.debug('saveData: custom food POST result', food.id, res);
           } catch (err) {
+            console.warn('saveData: POST failed, trying PATCH for custom food', food.id, err);
             try {
-              await supabaseRequest(`/custom_foods?id=eq.${encodeURIComponent(food.id)}`, { method: 'PATCH', body: food });
+              const pres = await supabaseRequest(`/custom_foods?id=eq.${encodeURIComponent(food.id)}`, { method: 'PATCH', body: food });
+              console.debug('saveData: custom food PATCH result', food.id, pres);
             } catch (e2) {
               console.warn('Failed to upsert custom food', food.id, err, e2);
             }
@@ -944,17 +949,39 @@ async function saveCustomFood(event) {
 
   const data = await loadData();
   data.customFoods = data.customFoods || [];
-  data.customFoods.push({
-    id: crypto.randomUUID(),
-    name,
-    weightGrams,
-    kcal,
-    protein,
-    carbs,
-    fat,
-  });
+  const id = crypto.randomUUID();
+  const newFood = { id, name, weightGrams, kcal, protein, carbs, fat };
+  data.customFoods.push(newFood);
 
+  console.debug('saveCustomFood: saving', newFood);
   await saveData(data);
+
+  // quick verification: is it present in localStorage?
+  try {
+    const local = loadFromLocalStorage();
+    const foundLocal = (local.customFoods || []).some((f) => f.id === id);
+    if (!foundLocal) console.warn('saveCustomFood: not found in localStorage after save', id);
+    else console.debug('saveCustomFood: found in localStorage', id);
+  } catch (e) {
+    console.warn('saveCustomFood: localStorage check failed', e);
+  }
+
+  // quick server check (non-blocking)
+  if (isSupabaseConfigured()) {
+    (async () => {
+      try {
+        const res = await supabaseRequest(`/custom_foods?id=eq.${encodeURIComponent(id)}&select=id,name,kcal,weight_grams`);
+        if (!res || !Array.isArray(res) || res.length === 0) {
+          console.warn('saveCustomFood: not found on server after save', id);
+        } else {
+          console.debug('saveCustomFood: found on server', id, res[0]);
+        }
+      } catch (e) {
+        console.warn('saveCustomFood: server check failed', e);
+      }
+    })();
+  }
+
   customFoodForm.reset();
   await renderCustomFoods();
 }
