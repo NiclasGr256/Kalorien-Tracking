@@ -10,6 +10,42 @@ const MEAL_LABELS = {
   abend: 'Abend',
   snack: 'Snack',
 };
+const SUPABASE_CONFIG = window.SUPABASE_CONFIG || {};
+const SUPABASE_URL = SUPABASE_CONFIG.url || 'https://eipttbdhaqyspkhqoqur.supabase.co';
+const SUPABASE_ANON_KEY = SUPABASE_CONFIG.anonKey || '';
+
+function isSupabaseConfigured() {
+  return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+}
+
+async function supabaseRequest(path, options = {}) {
+  if (!isSupabaseConfigured()) return null;
+
+  const headers = {
+    apikey: SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    Accept: 'application/json',
+    ...(options.headers || {}),
+  };
+
+  if (options.body !== undefined) {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  const response = await fetch(`${SUPABASE_URL}/rest/v1${path}`, {
+    method: options.method || 'GET',
+    headers,
+    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Supabase request failed (${response.status}): ${errorText}`);
+  }
+
+  if (response.status === 204) return null;
+  return response.json();
+}
 
 /** @type {'tracking' | 'history'} */
 let currentView = 'tracking';
@@ -68,6 +104,50 @@ function saveToLocalStorage(data) {
 async function loadData() {
   const localData = loadFromLocalStorage();
 
+  if (isSupabaseConfigured()) {
+    try {
+      const [entriesRows, foodsRows] = await Promise.all([
+        supabaseRequest('/entries?select=id,date,meal,name,kcal,protein,carbs,fat,weight_grams,created_at&order=created_at.asc'),
+        supabaseRequest('/custom_foods?select=id,name,weight_grams,kcal,protein,carbs,fat'),
+      ]);
+
+      const days = {};
+      const entryRows = Array.isArray(entriesRows) ? entriesRows : [];
+      for (const row of entryRows) {
+        const date = row.date;
+        if (!days[date]) days[date] = [];
+        days[date].push({
+          id: row.id,
+          name: row.name,
+          kcal: Number(row.kcal) || 0,
+          protein: Number(row.protein) || 0,
+          carbs: Number(row.carbs) || 0,
+          fat: Number(row.fat) || 0,
+          weightGrams: Number(row.weight_grams) || 0,
+          meal: row.meal || 'snack',
+          createdAt: row.created_at ? Date.parse(row.created_at) : Date.now(),
+        });
+      }
+
+      const customFoods = Array.isArray(foodsRows)
+        ? foodsRows.map((row) => ({
+            id: row.id,
+            name: row.name,
+            weightGrams: Number(row.weight_grams) || 100,
+            kcal: Number(row.kcal) || 0,
+            protein: Number(row.protein) || 0,
+            carbs: Number(row.carbs) || 0,
+            fat: Number(row.fat) || 0,
+          }))
+        : [];
+
+      return { days, customFoods };
+    } catch (error) {
+      console.warn('Supabase load failed, falling back to localStorage', error);
+      return localData;
+    }
+  }
+
   try {
     const db = await openDb();
     if (!db) return localData;
@@ -107,6 +187,48 @@ async function loadData() {
 async function saveData(data) {
   const normalizedData = normalizeData(data);
   saveToLocalStorage(normalizedData);
+
+  if (isSupabaseConfigured()) {
+    try {
+      const flatEntries = Object.entries(normalizedData.days).flatMap(([date, entries]) =>
+        (entries || []).map((entry) => ({
+          id: entry.id,
+          date,
+          meal: entry.meal,
+          name: entry.name,
+          kcal: Number(entry.kcal) || 0,
+          protein: Number(entry.protein) || 0,
+          carbs: Number(entry.carbs) || 0,
+          fat: Number(entry.fat) || 0,
+          weight_grams: Number(entry.weightGrams) || 0,
+          created_at: entry.createdAt ? new Date(entry.createdAt).toISOString() : new Date().toISOString(),
+        }))
+      );
+
+      await supabaseRequest('/entries', { method: 'DELETE' });
+      if (flatEntries.length) {
+        await supabaseRequest('/entries', { method: 'POST', body: flatEntries });
+      }
+
+      const customFoodsPayload = (normalizedData.customFoods || []).map((food) => ({
+        id: food.id,
+        name: food.name,
+        weight_grams: Number(food.weightGrams) || 100,
+        kcal: Number(food.kcal) || 0,
+        protein: Number(food.protein) || 0,
+        carbs: Number(food.carbs) || 0,
+        fat: Number(food.fat) || 0,
+      }));
+
+      await supabaseRequest('/custom_foods', { method: 'DELETE' });
+      if (customFoodsPayload.length) {
+        await supabaseRequest('/custom_foods', { method: 'POST', body: customFoodsPayload });
+      }
+    } catch (error) {
+      console.warn('Supabase save failed', error);
+    }
+    return;
+  }
 
   try {
     const db = await openDb();
