@@ -28,6 +28,11 @@ async function supabaseRequest(path, options = {}) {
     ...(options.headers || {}),
   };
 
+  // If calling REST upsert with on_conflict, request merge on duplicates
+  if ((options.method || 'GET').toUpperCase() === 'POST' && path && path.includes('on_conflict')) {
+    headers['Prefer'] = headers['Prefer'] || 'resolution=merge-duplicates';
+  }
+
   if (options.body !== undefined) {
     headers['Content-Type'] = 'application/json';
   }
@@ -44,7 +49,15 @@ async function supabaseRequest(path, options = {}) {
   }
 
   if (response.status === 204) return null;
-  return response.json();
+
+  const text = await response.text();
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
 }
 
 /** @type {'tracking' | 'history'} */
@@ -141,6 +154,29 @@ async function loadData() {
           }))
         : [];
 
+      // Merge with localStorage data so recent local-only entries remain visible
+      try {
+        const local = loadFromLocalStorage();
+        // merge days
+        for (const [dateKey, localEntries] of Object.entries(local.days || {})) {
+          if (!days[dateKey]) days[dateKey] = [];
+          const existingIds = new Set((days[dateKey] || []).map((e) => e.id));
+          for (const le of localEntries) {
+            if (!existingIds.has(le.id)) {
+              days[dateKey].push(le);
+            }
+          }
+        }
+
+        // merge custom foods
+        const existingFoodIds = new Set((customFoods || []).map((f) => f.id));
+        for (const lf of (local.customFoods || [])) {
+          if (!existingFoodIds.has(lf.id)) customFoods.push(lf);
+        }
+      } catch (e) {
+        console.warn('Failed merging local data', e);
+      }
+
       return { days, customFoods };
     } catch (error) {
       console.warn('Supabase load failed, falling back to localStorage', error);
@@ -205,9 +241,19 @@ async function saveData(data) {
         }))
       );
 
-      await supabaseRequest('/entries', { method: 'DELETE' });
       if (flatEntries.length) {
-        await supabaseRequest('/entries', { method: 'POST', body: flatEntries });
+        for (const entry of flatEntries) {
+          try {
+            await supabaseRequest('/entries?on_conflict=id', { method: 'POST', body: [entry] });
+          } catch (err) {
+            // fallback: try updating the existing row
+            try {
+              await supabaseRequest(`/entries?id=eq.${encodeURIComponent(entry.id)}`, { method: 'PATCH', body: entry });
+            } catch (e2) {
+              console.warn('Failed to upsert entry', entry.id, err, e2);
+            }
+          }
+        }
       }
 
       const customFoodsPayload = (normalizedData.customFoods || []).map((food) => ({
@@ -220,9 +266,18 @@ async function saveData(data) {
         fat: Number(food.fat) || 0,
       }));
 
-      await supabaseRequest('/custom_foods', { method: 'DELETE' });
       if (customFoodsPayload.length) {
-        await supabaseRequest('/custom_foods', { method: 'POST', body: customFoodsPayload });
+        for (const food of customFoodsPayload) {
+          try {
+            await supabaseRequest('/custom_foods?on_conflict=id', { method: 'POST', body: [food] });
+          } catch (err) {
+            try {
+              await supabaseRequest(`/custom_foods?id=eq.${encodeURIComponent(food.id)}`, { method: 'PATCH', body: food });
+            } catch (e2) {
+              console.warn('Failed to upsert custom food', food.id, err, e2);
+            }
+          }
+        }
       }
     } catch (error) {
       console.warn('Supabase save failed', error);
@@ -302,6 +357,7 @@ const foodSearchResults = document.getElementById('foodSearchResults');
 const totalProteinEl = document.getElementById('totalProtein');
 const totalMacrosEl = document.getElementById('totalMacros');
 const cancelEntry = document.getElementById('cancelEntry');
+const resetDataBtn = document.getElementById('resetDataBtn');
 const appEl = document.getElementById('app');
 const FOOD_SEARCH_MIN = 3;
 const SEARCH_DEBOUNCE = 300;
@@ -569,6 +625,36 @@ function closeNav() {
   menuBtn.setAttribute('aria-expanded', 'false');
 }
 
+async function resetAllData() {
+  const confirmed = window.confirm('Alle gespeicherten Daten wirklich löschen?');
+  if (!confirmed) return;
+
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+
+    const db = await openDb();
+    if (db) {
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction([DB_STORE, DB_STORE_CUSTOM_FOODS], 'readwrite');
+        const daysStore = tx.objectStore(DB_STORE);
+        const customFoodsStore = tx.objectStore(DB_STORE_CUSTOM_FOODS);
+        daysStore.clear();
+        customFoodsStore.clear();
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+      });
+    }
+
+  } catch (error) {
+    console.warn('Data reset failed', error);
+  }
+
+  selectedDate = startOfDay(new Date());
+  await setView('tracking');
+  window.alert('Alle Daten wurden gelöscht.');
+}
+
 async function setView(view) {
   currentView = view;
   const isTracking = view === 'tracking';
@@ -832,6 +918,15 @@ async function deleteEntry(id) {
   const data = await loadData();
   const key = dateKey(selectedDate);
   data.days[key] = (data.days[key] || []).filter((e) => e.id !== id);
+
+  if (isSupabaseConfigured()) {
+    try {
+      await supabaseRequest(`/entries?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
+    } catch (error) {
+      console.warn('Supabase delete entry failed', error);
+    }
+  }
+
   await saveData(data);
   await renderTracking();
 }
@@ -867,6 +962,15 @@ async function saveCustomFood(event) {
 async function deleteCustomFood(id) {
   const data = await loadData();
   data.customFoods = (data.customFoods || []).filter((food) => food.id !== id);
+
+  if (isSupabaseConfigured()) {
+    try {
+      await supabaseRequest(`/custom_foods?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
+    } catch (error) {
+      console.warn('Supabase delete custom food failed', error);
+    }
+  }
+
   await saveData(data);
   await renderCustomFoods();
 }
@@ -885,6 +989,9 @@ menuBtn.addEventListener('click', () => {
 });
 
 navBackdrop.addEventListener('click', closeNav);
+resetDataBtn.addEventListener('click', () => {
+  void resetAllData();
+});
 
 navDrawer.querySelectorAll('.nav-item').forEach((btn) => {
   btn.addEventListener('click', () => {
