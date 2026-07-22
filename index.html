@@ -31,7 +31,7 @@
         </div>
 
         <div class="header-center header-center--page hidden" id="headerHistory">
-          <h1 class="page-title">Übersicht</h1>
+          <h1 class="page-title" id="pageTitle">Übersicht</h1>
         </div>
 
         <div class="header-spacer" aria-hidden="true"></div>
@@ -44,6 +44,7 @@
         <p class="summary-label">Gesamt</p>
         <p class="summary-total"><span id="totalKcal">0</span> <span class="summary-unit">kcal</span></p>
         <p class="summary-subtotal"><span id="totalProtein">0</span> <span class="summary-unit">g Eiweiß</span></p>
+        <p class="summary-macros" id="totalMacros">0 g P · 0 g F · 0 g K</p>
         <p class="summary-meta" id="entryCount">0 Einträge</p>
       </section>
 
@@ -69,6 +70,45 @@
       <p class="empty-state hidden" id="historyEmpty">Noch keine Daten vorhanden.</p>
     </main>
 
+    <!-- Custom foods -->
+    <main class="main view hidden" id="viewCustomFoods">
+      <form class="custom-food-form" id="customFoodForm">
+        <label class="field">
+          <span>Gericht</span>
+          <input type="text" id="customFoodName" placeholder="z.B. Pasta Bolognese" required autocomplete="off">
+        </label>
+
+        <label class="field">
+          <span>Referenzgewicht (g)</span>
+          <input type="number" id="customFoodWeight" placeholder="100" min="1" max="5000" required inputmode="numeric" step="1">
+        </label>
+
+        <label class="field">
+          <span>Kalorien (kcal / 100 g)</span>
+          <input type="number" id="customFoodKcal" placeholder="180" min="0" max="10000" required inputmode="numeric">
+        </label>
+
+        <label class="field">
+          <span>Eiweiß (g / 100 g)</span>
+          <input type="number" id="customFoodProtein" placeholder="12" min="0" max="1000" inputmode="numeric" step="0.1">
+        </label>
+
+        <label class="field">
+          <span>Kohlenhydrate (g / 100 g)</span>
+          <input type="number" id="customFoodCarbs" placeholder="24" min="0" max="1000" inputmode="numeric" step="0.1">
+        </label>
+
+        <label class="field">
+          <span>Fett (g / 100 g)</span>
+          <input type="number" id="customFoodFat" placeholder="8" min="0" max="1000" inputmode="numeric" step="0.1">
+        </label>
+
+        <button type="submit" class="btn btn-primary">Gericht speichern</button>
+      </form>
+
+      <div class="custom-food-list" id="customFoodList"></div>
+    </main>
+
     <button type="button" class="fab" id="addBtn" aria-label="Eintrag hinzufügen">+</button>
   </div>
 
@@ -77,6 +117,7 @@
   <nav class="nav-drawer" id="navDrawer" aria-label="Navigation">
     <p class="nav-title">Kalorien Tracker</p>
     <button type="button" class="nav-item active" data-view="tracking">Tracking</button>
+    <button type="button" class="nav-item" data-view="customFoods">Gerichte</button>
     <button type="button" class="nav-item" data-view="history">Übersicht</button>
   </nav>
 
@@ -102,6 +143,11 @@
       </label>
 
       <label class="field">
+        <span>Gewicht (g)</span>
+        <input type="number" id="foodWeight" placeholder="150" min="1" max="5000" inputmode="numeric" step="1">
+      </label>
+
+      <label class="field">
         <span>Kalorien (kcal)</span>
         <input type="number" id="foodKcal" placeholder="350" min="1" max="10000" required inputmode="numeric">
       </label>
@@ -109,6 +155,16 @@
       <label class="field">
         <span>Eiweiß (g)</span>
         <input type="number" id="foodProtein" placeholder="25" min="0" max="1000" required inputmode="numeric" step="0.1">
+      </label>
+
+      <label class="field">
+        <span>Kohlenhydrate (g)</span>
+        <input type="number" id="foodCarbs" placeholder="40" min="0" max="1000" inputmode="numeric" step="0.1">
+      </label>
+
+      <label class="field">
+        <span>Fett (g)</span>
+        <input type="number" id="foodFat" placeholder="12" min="0" max="1000" inputmode="numeric" step="0.1">
       </label>
 
       <div class="modal-actions">

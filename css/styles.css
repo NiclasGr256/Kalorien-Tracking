@@ -316,6 +316,18 @@ body {
   color: var(--text-muted);
 }
 
+.summary-subtotal {
+  margin-top: 6px;
+  font-size: 1rem;
+  color: var(--text-muted);
+}
+
+.summary-macros {
+  margin-top: 8px;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
 .summary-meta {
   margin-top: 8px;
   font-size: 0.9rem;
@@ -422,6 +434,49 @@ body {
 
 .empty-state.hidden {
   display: none;
+}
+
+.custom-food-form {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.custom-food-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.custom-food-card {
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.custom-food-card h3 {
+  font-size: 1rem;
+  margin-bottom: 4px;
+}
+
+.custom-food-card p {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin-top: 2px;
+}
+
+.custom-food-card button {
+  border: none;
+  background: var(--surface-2);
+  color: var(--over);
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
 }
 
 /* FAB */

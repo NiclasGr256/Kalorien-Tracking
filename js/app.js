@@ -2,6 +2,7 @@ const STORAGE_KEY = 'kalorien-tracker-v1';
 const DB_NAME = 'kalorien-tracker';
 const DB_VERSION = 1;
 const DB_STORE = 'days';
+const DB_STORE_CUSTOM_FOODS = 'custom-foods';
 const MEAL_ORDER = ['frühstück', 'mittag', 'abend', 'snack'];
 const MEAL_LABELS = {
   frühstück: 'Frühstück',
@@ -34,21 +35,31 @@ async function openDb() {
       if (!db.objectStoreNames.contains(DB_STORE)) {
         db.createObjectStore(DB_STORE, { keyPath: 'date' });
       }
+      if (!db.objectStoreNames.contains(DB_STORE_CUSTOM_FOODS)) {
+        db.createObjectStore(DB_STORE_CUSTOM_FOODS, { keyPath: 'id' });
+      }
     };
   });
 }
 
+function normalizeData(data) {
+  return {
+    days: data?.days || {},
+    customFoods: Array.isArray(data?.customFoods) ? data.customFoods : [],
+  };
+}
+
 function loadFromLocalStorage() {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || { days: {} };
+    return normalizeData(JSON.parse(localStorage.getItem(STORAGE_KEY)) || { days: {} });
   } catch {
-    return { days: {} };
+    return { days: {}, customFoods: [] };
   }
 }
 
 function saveToLocalStorage(data) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeData(data)));
   } catch (error) {
     console.warn('LocalStorage save failed', error);
   }
@@ -61,7 +72,7 @@ async function loadData() {
     const db = await openDb();
     if (!db) return localData;
 
-    return await new Promise((resolve, reject) => {
+    const daysData = await new Promise((resolve, reject) => {
       const tx = db.transaction(DB_STORE, 'readonly');
       const store = tx.objectStore(DB_STORE);
       const request = store.getAll();
@@ -71,11 +82,22 @@ async function loadData() {
         for (const record of request.result) {
           days[record.date] = record.entries;
         }
-        resolve({ days: Object.keys(days).length ? days : localData.days });
+        resolve(Object.keys(days).length ? days : localData.days);
       };
 
       request.onerror = () => reject(request.error);
     });
+
+    const customFoodsData = await new Promise((resolve, reject) => {
+      const tx = db.transaction(DB_STORE_CUSTOM_FOODS, 'readonly');
+      const store = tx.objectStore(DB_STORE_CUSTOM_FOODS);
+      const request = store.getAll();
+
+      request.onsuccess = () => resolve(request.result.length ? request.result : localData.customFoods);
+      request.onerror = () => reject(request.error);
+    });
+
+    return { days: daysData, customFoods: customFoodsData };
   } catch (error) {
     console.warn('IndexedDB load failed, falling back to localStorage', error);
     return localData;
@@ -83,21 +105,28 @@ async function loadData() {
 }
 
 async function saveData(data) {
-  saveToLocalStorage(data);
+  const normalizedData = normalizeData(data);
+  saveToLocalStorage(normalizedData);
 
   try {
     const db = await openDb();
     if (!db) return;
 
     await new Promise((resolve, reject) => {
-      const tx = db.transaction(DB_STORE, 'readwrite');
-      const store = tx.objectStore(DB_STORE);
+      const tx = db.transaction([DB_STORE, DB_STORE_CUSTOM_FOODS], 'readwrite');
+      const daysStore = tx.objectStore(DB_STORE);
+      const customFoodsStore = tx.objectStore(DB_STORE_CUSTOM_FOODS);
 
-      store.clear();
-      for (const [date, entries] of Object.entries(data.days)) {
+      daysStore.clear();
+      for (const [date, entries] of Object.entries(normalizedData.days)) {
         if (entries.length > 0) {
-          store.put({ date, entries });
+          daysStore.put({ date, entries });
         }
+      }
+
+      customFoodsStore.clear();
+      for (const food of normalizedData.customFoods) {
+        customFoodsStore.put(food);
       }
 
       tx.oncomplete = () => resolve();
@@ -131,11 +160,25 @@ const addBtn = document.getElementById('addBtn');
 const entryModal = document.getElementById('entryModal');
 const entryForm = document.getElementById('entryForm');
 const mealSelect = document.getElementById('mealSelect');
+const viewCustomFoods = document.getElementById('viewCustomFoods');
+const pageTitle = document.getElementById('pageTitle');
+const customFoodForm = document.getElementById('customFoodForm');
+const customFoodName = document.getElementById('customFoodName');
+const customFoodWeight = document.getElementById('customFoodWeight');
+const customFoodKcal = document.getElementById('customFoodKcal');
+const customFoodProtein = document.getElementById('customFoodProtein');
+const customFoodCarbs = document.getElementById('customFoodCarbs');
+const customFoodFat = document.getElementById('customFoodFat');
+const customFoodList = document.getElementById('customFoodList');
 const foodName = document.getElementById('foodName');
+const foodWeight = document.getElementById('foodWeight');
 const foodKcal = document.getElementById('foodKcal');
 const foodProtein = document.getElementById('foodProtein');
+const foodCarbs = document.getElementById('foodCarbs');
+const foodFat = document.getElementById('foodFat');
 const foodSearchResults = document.getElementById('foodSearchResults');
 const totalProteinEl = document.getElementById('totalProtein');
+const totalMacrosEl = document.getElementById('totalMacros');
 const cancelEntry = document.getElementById('cancelEntry');
 const appEl = document.getElementById('app');
 const FOOD_SEARCH_MIN = 3;
@@ -143,6 +186,7 @@ const SEARCH_DEBOUNCE = 300;
 const SEARCH_PAGE_SIZE = 20;
 let searchTimeout = null;
 let searchAbortController = null;
+let selectedFoodBaseNutrition = null;
 
 function startOfDay(d) {
   const copy = new Date(d);
@@ -189,11 +233,27 @@ async function searchFood(query) {
     if (!response.ok) return [];
 
     const data = await response.json();
-    return (data.products || [])
+    const customFoodsData = await loadData();
+    const customMatches = (customFoodsData.customFoods || [])
+      .filter((food) => food.name && food.name.toLowerCase().includes(query.toLowerCase()))
+      .map((food) => ({
+        name: food.name,
+        brand: 'Eigene Rezeptur',
+        kcal: Number(food.kcal) || 0,
+        protein: Number(food.protein) || 0,
+        carbs: Number(food.carbs) || 0,
+        fat: Number(food.fat) || 0,
+        portionLabel: `${food.weightGrams || 100} g`,
+        isCustomFood: true,
+      }));
+
+    const apiResults = (data.products || [])
       .map((product) => {
         const nutriments = product.nutriments || {};
         const kcal = nutriments['energy-kcal_serving'] ?? nutriments['energy-kcal_100g'] ?? nutriments['energy_100g'] ?? nutriments['energy-kcal'];
         const protein = nutriments['proteins_serving'] ?? nutriments['proteins_100g'] ?? nutriments['proteins'];
+        const carbs = nutriments['carbohydrates_serving'] ?? nutriments['carbohydrates_100g'] ?? nutriments['carbohydrates'];
+        const fat = nutriments['fat_serving'] ?? nutriments['fat_100g'] ?? nutriments['fat'];
         const portionLabel = nutriments['energy-kcal_serving'] ? product.serving_size || 'Portion' : '100 g';
 
         return {
@@ -201,10 +261,14 @@ async function searchFood(query) {
           brand: product.brands || '',
           kcal: kcal != null ? Number(kcal) : null,
           protein: protein != null ? Number(protein) : null,
+          carbs: carbs != null ? Number(carbs) : null,
+          fat: fat != null ? Number(fat) : null,
           portionLabel,
         };
       })
       .filter((item) => item.name);
+
+    return [...customMatches, ...apiResults].slice(0, SEARCH_PAGE_SIZE);
   } catch (error) {
     if (error.name === 'AbortError') return [];
     console.warn('Food search failed', error);
@@ -234,7 +298,7 @@ function renderSearchResults(results) {
     item.className = 'search-result-item';
     item.innerHTML = `
       <div class="search-result-title">${escapeHtml(result.name)}</div>
-      <div class="search-result-meta">${result.brand ? `${escapeHtml(result.brand)} · ` : ''}${result.kcal != null ? `${Math.round(result.kcal)} kcal` : 'Keine kcal'}${result.protein != null ? ` · ${result.protein.toFixed(1)} g Eiweiß` : ''}${result.portionLabel ? ` · ${escapeHtml(result.portionLabel)}` : ''}</div>
+      <div class="search-result-meta">${result.brand ? `${escapeHtml(result.brand)} · ` : ''}${result.kcal != null ? `${Math.round(result.kcal)} kcal` : 'Keine kcal'}${result.protein != null ? ` · ${result.protein.toFixed(1)} g Eiweiß` : ''}${result.carbs != null ? ` · ${result.carbs.toFixed(1)} g K` : ''}${result.fat != null ? ` · ${result.fat.toFixed(1)} g F` : ''}${result.portionLabel ? ` · ${escapeHtml(result.portionLabel)}` : ''}</div>
     `;
     item.addEventListener('click', () => {
       fillFoodFromSuggestion(result);
@@ -259,10 +323,33 @@ function clearSearchResults() {
   foodName.setAttribute('aria-expanded', 'false');
 }
 
+function parseNumericValue(value) {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function applySelectedFoodNutrition() {
+  if (!selectedFoodBaseNutrition) return;
+
+  const grams = Math.max(parseNumericValue(foodWeight.value) || 100, 1);
+  const factor = grams / 100;
+
+  foodKcal.value = String(Math.max(Math.round(selectedFoodBaseNutrition.kcal * factor), 0));
+  foodProtein.value = selectedFoodBaseNutrition.protein != null ? String((selectedFoodBaseNutrition.protein * factor).toFixed(1)) : '';
+  foodCarbs.value = selectedFoodBaseNutrition.carbs != null ? String((selectedFoodBaseNutrition.carbs * factor).toFixed(1)) : '';
+  foodFat.value = selectedFoodBaseNutrition.fat != null ? String((selectedFoodBaseNutrition.fat * factor).toFixed(1)) : '';
+}
+
 function fillFoodFromSuggestion(result) {
   foodName.value = result.name;
-  if (result.kcal != null) foodKcal.value = String(Math.round(result.kcal));
-  if (result.protein != null) foodProtein.value = String(result.protein.toFixed(1));
+  selectedFoodBaseNutrition = {
+    kcal: result.kcal != null ? result.kcal : 0,
+    protein: result.protein != null ? result.protein : 0,
+    carbs: result.carbs != null ? result.carbs : 0,
+    fat: result.fat != null ? result.fat : 0,
+  };
+  foodWeight.value = '100';
+  applySelectedFoodNutrition();
   clearSearchResults();
 }
 
@@ -286,6 +373,12 @@ function handleFoodNameInput() {
 function handleFoodNameKeyDown(event) {
   if (event.key === 'Escape') {
     clearSearchResults();
+  }
+}
+
+function handleWeightInput() {
+  if (selectedFoodBaseNutrition) {
+    applySelectedFoodNutrition();
   }
 }
 
@@ -318,8 +411,24 @@ function sumProtein(entries) {
   return entries.reduce((sum, e) => sum + (Number(e.protein) || 0), 0);
 }
 
+function sumCarbs(entries) {
+  return entries.reduce((sum, e) => sum + (Number(e.carbs) || 0), 0);
+}
+
+function sumFat(entries) {
+  return entries.reduce((sum, e) => sum + (Number(e.fat) || 0), 0);
+}
+
 function getEntryProtein(entry) {
   return Number(entry.protein) || 0;
+}
+
+function getEntryCarbs(entry) {
+  return Number(entry.carbs) || 0;
+}
+
+function getEntryFat(entry) {
+  return Number(entry.fat) || 0;
 }
 
 function formatEntryCount(count) {
@@ -341,21 +450,27 @@ function closeNav() {
 async function setView(view) {
   currentView = view;
   const isTracking = view === 'tracking';
+  const isCustomFoods = view === 'customFoods';
+  const isHistory = view === 'history';
 
   viewTracking.classList.toggle('hidden', !isTracking);
-  viewHistory.classList.toggle('hidden', isTracking);
+  viewHistory.classList.toggle('hidden', !isHistory);
+  viewCustomFoods.classList.toggle('hidden', !isCustomFoods);
   headerTracking.classList.toggle('hidden', !isTracking);
-  headerHistory.classList.toggle('hidden', isTracking);
+  headerHistory.classList.toggle('hidden', !isHistory && !isCustomFoods);
   addBtn.classList.toggle('hidden', !isTracking);
   appEl.classList.toggle('app--no-fab', !isTracking);
+
+  pageTitle.textContent = isHistory ? 'Übersicht' : isCustomFoods ? 'Gerichte' : 'Übersicht';
 
   navDrawer.querySelectorAll('.nav-item').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.view === view);
   });
 
-  location.hash = view === 'history' ? '#/history' : '#/';
+  location.hash = view === 'history' ? '#/history' : view === 'customFoods' ? '#/gerichte' : '#/';
 
   if (isTracking) await renderTracking();
+  else if (isCustomFoods) await renderCustomFoods();
   else await renderHistory();
 
   closeNav();
@@ -367,6 +482,8 @@ async function renderTracking() {
   const entries = getDayEntries(data, key);
   const total = sumKcal(entries);
   const totalProtein = sumProtein(entries);
+  const totalCarbs = sumCarbs(entries);
+  const totalFat = sumFat(entries);
 
   dateLabel.textContent = formatDateLabel(selectedDate);
   dateSub.textContent = formatDateSub(selectedDate);
@@ -374,6 +491,7 @@ async function renderTracking() {
 
   totalKcalEl.textContent = total.toLocaleString('de-DE');
   totalProteinEl.textContent = totalProtein.toLocaleString('de-DE');
+  totalMacrosEl.textContent = `${totalProtein.toLocaleString('de-DE')} g P · ${totalFat.toLocaleString('de-DE')} g F · ${totalCarbs.toLocaleString('de-DE')} g K`;
   entryCountEl.textContent = formatEntryCount(entries.length);
 
   mealsList.innerHTML = '';
@@ -399,6 +517,36 @@ async function renderTracking() {
   }
 
   emptyState.classList.toggle('hidden', entries.length > 0);
+}
+
+async function renderCustomFoods() {
+  const data = await loadData();
+  const foods = Array.isArray(data.customFoods) ? data.customFoods : [];
+  customFoodList.innerHTML = '';
+
+  if (!foods.length) {
+    const empty = document.createElement('p');
+    empty.className = 'empty-state';
+    empty.textContent = 'Noch keine eigenen Gerichte gespeichert.';
+    customFoodList.appendChild(empty);
+    return;
+  }
+
+  for (const food of foods) {
+    const card = document.createElement('div');
+    card.className = 'custom-food-card';
+    card.innerHTML = `
+      <div>
+        <h3>${escapeHtml(food.name)}</h3>
+        <p>${food.weightGrams || 100} g · ${Number(food.kcal) || 0} kcal</p>
+        <p>P ${Number(food.protein) || 0} g · F ${Number(food.fat) || 0} g · K ${Number(food.carbs) || 0} g</p>
+      </div>
+      <button type="button" data-delete="${food.id}">Entfernen</button>
+    `;
+
+    card.querySelector('[data-delete]').addEventListener('click', () => deleteCustomFood(food.id));
+    customFoodList.appendChild(card);
+  }
 }
 
 async function renderHistory() {
@@ -458,7 +606,7 @@ function createEntryEl(entry) {
     <div class="entry-info">
       <div class="entry-main">
         <div class="entry-name">${escapeHtml(entry.name)}</div>
-        <div class="entry-subtext">${entry.kcal} kcal · ${getEntryProtein(entry)} g Eiweiß</div>
+        <div class="entry-subtext">${entry.kcal} kcal · P ${getEntryProtein(entry)} g · F ${getEntryFat(entry)} g · K ${getEntryCarbs(entry)} g</div>
       </div>
     </div>
     <span class="entry-kcal">${entry.kcal}</span>
@@ -485,8 +633,12 @@ function openAddModal() {
   document.getElementById('modalTitle').textContent = 'Eintrag hinzufügen';
   mealSelect.value = guessMealByTime();
   foodName.value = '';
+  foodWeight.value = '';
   foodKcal.value = '';
   foodProtein.value = '';
+  foodCarbs.value = '';
+  foodFat.value = '';
+  selectedFoodBaseNutrition = null;
   clearSearchResults();
   entryModal.showModal();
   setTimeout(() => foodName.focus(), 100);
@@ -497,8 +649,12 @@ function openEditModal(entry) {
   document.getElementById('modalTitle').textContent = 'Eintrag bearbeiten';
   mealSelect.value = entry.meal;
   foodName.value = entry.name;
+  foodWeight.value = String(entry.weightGrams ?? '');
   foodKcal.value = String(entry.kcal);
   foodProtein.value = String(entry.protein ?? 0);
+  foodCarbs.value = String(entry.carbs ?? 0);
+  foodFat.value = String(entry.fat ?? 0);
+  selectedFoodBaseNutrition = null;
   clearSearchResults();
   entryModal.showModal();
   setTimeout(() => foodName.focus(), 100);
@@ -517,7 +673,10 @@ async function saveEntry(e) {
   const name = foodName.value.trim();
   const kcal = parseInt(foodKcal.value, 10);
   const protein = parseFloat(foodProtein.value) || 0;
-  if (!name || !kcal || kcal < 1 || protein < 0) return;
+  const carbs = parseFloat(foodCarbs.value) || 0;
+  const fat = parseFloat(foodFat.value) || 0;
+  const weightGrams = parseInt(foodWeight.value, 10) || 0;
+  if (!name || !kcal || kcal < 1 || protein < 0 || carbs < 0 || fat < 0) return;
 
   const data = await loadData();
   const key = dateKey(selectedDate);
@@ -526,7 +685,7 @@ async function saveEntry(e) {
   if (editingEntryId) {
     const idx = data.days[key].findIndex((x) => x.id === editingEntryId);
     if (idx !== -1) {
-      data.days[key][idx] = { ...data.days[key][idx], name, kcal, protein, meal: mealSelect.value };
+      data.days[key][idx] = { ...data.days[key][idx], name, kcal, protein, carbs, fat, weightGrams, meal: mealSelect.value };
     }
   } else {
     data.days[key].push({
@@ -534,6 +693,9 @@ async function saveEntry(e) {
       name,
       kcal,
       protein,
+      carbs,
+      fat,
+      weightGrams,
       meal: mealSelect.value,
       createdAt: Date.now(),
     });
@@ -552,8 +714,46 @@ async function deleteEntry(id) {
   await renderTracking();
 }
 
+async function saveCustomFood(event) {
+  event.preventDefault();
+  const name = customFoodName.value.trim();
+  const weightGrams = parseInt(customFoodWeight.value, 10) || 100;
+  const kcal = parseFloat(customFoodKcal.value) || 0;
+  const protein = parseFloat(customFoodProtein.value) || 0;
+  const carbs = parseFloat(customFoodCarbs.value) || 0;
+  const fat = parseFloat(customFoodFat.value) || 0;
+
+  if (!name || kcal < 0 || protein < 0 || carbs < 0 || fat < 0) return;
+
+  const data = await loadData();
+  data.customFoods = data.customFoods || [];
+  data.customFoods.push({
+    id: crypto.randomUUID(),
+    name,
+    weightGrams,
+    kcal,
+    protein,
+    carbs,
+    fat,
+  });
+
+  await saveData(data);
+  customFoodForm.reset();
+  await renderCustomFoods();
+}
+
+async function deleteCustomFood(id) {
+  const data = await loadData();
+  data.customFoods = (data.customFoods || []).filter((food) => food.id !== id);
+  await saveData(data);
+  await renderCustomFoods();
+}
+
 function initFromHash() {
-  setView(location.hash === '#/history' ? 'history' : 'tracking');
+  const hash = location.hash;
+  if (hash === '#/history') setView('history');
+  else if (hash === '#/gerichte') setView('customFoods');
+  else setView('tracking');
 }
 
 // Events
@@ -583,10 +783,12 @@ nextDayBtn.addEventListener('click', async () => {
 
 addBtn.addEventListener('click', openAddModal);
 entryForm.addEventListener('submit', saveEntry);
+customFoodForm.addEventListener('submit', saveCustomFood);
 cancelEntry.addEventListener('click', () => entryModal.close());
 
 foodName.addEventListener('input', handleFoodNameInput);
 foodName.addEventListener('keydown', handleFoodNameKeyDown);
+foodWeight.addEventListener('input', handleWeightInput);
 
 document.addEventListener('click', (event) => {
   if (!foodSearchResults.contains(event.target) && event.target !== foodName) {
