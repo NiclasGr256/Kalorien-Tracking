@@ -1,3 +1,5 @@
+import { buildGoalRows, formatGoalPercent, normalizeGoalValues } from './goals.mjs';
+
 const STORAGE_KEY = 'kalorien-tracker-v1';
 const DB_NAME = 'kalorien-tracker';
 const DB_VERSION = 1;
@@ -60,7 +62,7 @@ async function supabaseRequest(path, options = {}) {
   }
 }
 
-/** @type {'tracking' | 'history'} */
+/** @type {'tracking' | 'history' | 'customFoods' | 'goals'} */
 let currentView = 'tracking';
 /** @type {Date} */
 let selectedDate = startOfDay(new Date());
@@ -95,6 +97,7 @@ function normalizeData(data) {
   return {
     days: data?.days || {},
     customFoods: Array.isArray(data?.customFoods) ? data.customFoods : [],
+    goals: data?.goals || {},
   };
 }
 
@@ -193,7 +196,7 @@ async function loadData() {
         console.warn('Failed merging local data', e);
       }
 
-      return { days, customFoods };
+      return { days, customFoods, goals: localData.goals || {} };
     } catch (error) {
       console.warn('Supabase load failed, falling back to localStorage', error);
       return localData;
@@ -229,7 +232,7 @@ async function loadData() {
       request.onerror = () => reject(request.error);
     });
 
-    return { days: daysData, customFoods: customFoodsData };
+    return { days: daysData, customFoods: customFoodsData, goals: localData.goals || {} };
   } catch (error) {
     console.warn('IndexedDB load failed, falling back to localStorage', error);
     return localData;
@@ -346,6 +349,8 @@ const headerTracking = document.getElementById('headerTracking');
 const headerHistory = document.getElementById('headerHistory');
 const viewTracking = document.getElementById('viewTracking');
 const viewHistory = document.getElementById('viewHistory');
+const viewGoals = document.getElementById('viewGoals');
+const viewCustomFoods = document.getElementById('viewCustomFoods');
 const dateLabel = document.getElementById('dateLabel');
 const dateSub = document.getElementById('dateSub');
 const prevDayBtn = document.getElementById('prevDay');
@@ -360,8 +365,9 @@ const addBtn = document.getElementById('addBtn');
 const entryModal = document.getElementById('entryModal');
 const entryForm = document.getElementById('entryForm');
 const mealSelect = document.getElementById('mealSelect');
-const viewCustomFoods = document.getElementById('viewCustomFoods');
 const pageTitle = document.getElementById('pageTitle');
+const goalsForm = document.getElementById('goalsForm');
+const goalsOverview = document.getElementById('goalsOverview');
 const customFoodForm = document.getElementById('customFoodForm');
 const customFoodName = document.getElementById('customFoodName');
 const customFoodWeight = document.getElementById('customFoodWeight');
@@ -608,7 +614,7 @@ function formatTableDate(key) {
   const yesterday = startOfDay(new Date());
   yesterday.setDate(yesterday.getDate() - 1);
   if (dateKey(d) === dateKey(yesterday)) return 'Gestern';
-  return d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
+  return d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
 }
 
 function sumKcal(entries) {
@@ -625,6 +631,10 @@ function sumCarbs(entries) {
 
 function sumFat(entries) {
   return entries.reduce((sum, e) => sum + (Number(e.fat) || 0), 0);
+}
+
+function sumFiber(entries) {
+  return entries.reduce((sum, e) => sum + (Number(e.fiber) || 0), 0);
 }
 
 function getEntryProtein(entry) {
@@ -694,25 +704,28 @@ async function setView(view) {
   const isTracking = view === 'tracking';
   const isCustomFoods = view === 'customFoods';
   const isHistory = view === 'history';
+  const isGoals = view === 'goals';
 
   viewTracking.classList.toggle('hidden', !isTracking);
   viewHistory.classList.toggle('hidden', !isHistory);
   viewCustomFoods.classList.toggle('hidden', !isCustomFoods);
+  viewGoals.classList.toggle('hidden', !isGoals);
   headerTracking.classList.toggle('hidden', !isTracking);
-  headerHistory.classList.toggle('hidden', !isHistory && !isCustomFoods);
+  headerHistory.classList.toggle('hidden', !isHistory && !isCustomFoods && !isGoals);
   addBtn.classList.toggle('hidden', !isTracking);
   appEl.classList.toggle('app--no-fab', !isTracking);
 
-  pageTitle.textContent = isHistory ? 'Übersicht' : isCustomFoods ? 'Gerichte' : 'Übersicht';
+  pageTitle.textContent = isHistory ? 'Übersicht' : isCustomFoods ? 'Gerichte' : isGoals ? 'Ziele' : 'Übersicht';
 
   navDrawer.querySelectorAll('.nav-item').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.view === view);
   });
 
-  location.hash = view === 'history' ? '#/history' : view === 'customFoods' ? '#/gerichte' : '#/';
+  location.hash = view === 'history' ? '#/history' : view === 'customFoods' ? '#/gerichte' : view === 'goals' ? '#/ziele' : '#/';
 
   if (isTracking) await renderTracking();
   else if (isCustomFoods) await renderCustomFoods();
+  else if (isGoals) await renderGoals();
   else await renderHistory();
 
   closeNav();
@@ -761,6 +774,50 @@ async function renderTracking() {
   emptyState.classList.toggle('hidden', entries.length > 0);
 }
 
+async function renderGoals() {
+  const data = await loadData();
+  const key = dateKey(selectedDate);
+  const entries = getDayEntries(data, key);
+  const actuals = {
+    kcal: sumKcal(entries),
+    protein: sumProtein(entries),
+    carbs: sumCarbs(entries),
+    fat: sumFat(entries),
+    fiber: sumFiber(entries),
+  };
+  const goals = normalizeGoalValues(data.goals || {});
+  const rows = buildGoalRows(actuals, goals);
+
+  goalsOverview.innerHTML = '';
+  goalsForm.querySelectorAll('.goal-input').forEach((input) => {
+    const key = input.dataset.goalKey;
+    const value = goals[key];
+    input.value = value > 0 ? String(value) : '';
+  });
+
+  for (const row of rows) {
+    const card = document.createElement('div');
+    card.className = 'goal-card';
+    card.innerHTML = `
+      <div class="goal-card-header">
+        <div>
+          <h3>${escapeHtml(row.label)}</h3>
+          <p>${row.actual.toLocaleString('de-DE')} ${row.unit} / ${row.goal > 0 ? `${row.goal.toLocaleString('de-DE')} ${row.unit}` : 'kein Ziel'}</p>
+        </div>
+        <span class="goal-pill" style="background:${row.color}; color:#111827;">${row.percent == null ? '—' : formatGoalPercent(row.percent)}</span>
+      </div>
+      <div class="goal-progress" aria-hidden="true">
+        <div class="goal-progress-bar" style="width:${Math.min(100, Math.max(0, row.progressWidth))}%; background:${row.color};"></div>
+      </div>
+      <div class="goal-meta">
+        <span>Ist: ${row.actual.toLocaleString('de-DE')} ${row.unit}</span>
+        <span>Ziel: ${row.goal > 0 ? `${row.goal.toLocaleString('de-DE')} ${row.unit}` : 'kein Ziel'}</span>
+      </div>
+    `;
+    goalsOverview.appendChild(card);
+  }
+}
+
 async function renderCustomFoods() {
   const data = await loadData();
   const foods = Array.isArray(data.customFoods) ? data.customFoods : [];
@@ -793,12 +850,16 @@ async function renderCustomFoods() {
 
 async function renderHistory() {
   const data = await loadData();
+  const goals = normalizeGoalValues(data.goals || {});
   const rows = Object.entries(data.days)
     .filter(([, entries]) => entries.length > 0)
     .map(([key, entries]) => ({
       key,
       total: sumKcal(entries),
       protein: sumProtein(entries),
+      carbs: sumCarbs(entries),
+      fat: sumFat(entries),
+      fiber: sumFiber(entries),
       count: entries.length,
     }))
     .sort((a, b) => b.key.localeCompare(a.key));
@@ -806,12 +867,26 @@ async function renderHistory() {
   historyBody.innerHTML = '';
 
   for (const row of rows) {
+    const goalRows = buildGoalRows(
+      {
+        kcal: row.total,
+        protein: row.protein,
+        carbs: row.carbs,
+        fat: row.fat,
+        fiber: row.fiber,
+      },
+      goals,
+    );
+
     const tr = document.createElement('tr');
     tr.tabIndex = 0;
     tr.innerHTML = `
       <td>${escapeHtml(formatTableDate(row.key))}</td>
-      <td class="num">${row.total.toLocaleString('de-DE')}</td>
-      <td class="num">${row.protein.toLocaleString('de-DE')}</td>
+      <td class="num" style="color:${goalRows[0].color}">${row.total.toLocaleString('de-DE')}</td>
+      <td class="num" style="color:${goalRows[1].color}">${row.protein.toLocaleString('de-DE')}</td>
+      <td class="num" style="color:${goalRows[2].color}">${row.carbs.toLocaleString('de-DE')}</td>
+      <td class="num" style="color:${goalRows[3].color}">${row.fat.toLocaleString('de-DE')}</td>
+      <td class="num" style="color:${goalRows[4].color}">${row.fiber.toLocaleString('de-DE')}</td>
       <td class="num">${row.count}</td>
     `;
     tr.addEventListener('click', () => goToDay(row.key));
@@ -953,6 +1028,9 @@ async function saveEntry(e) {
 }
 
 async function deleteEntry(id) {
+  const confirmed = window.confirm('Eintrag wirklich löschen?');
+  if (!confirmed) return;
+
   const data = await loadData();
   const key = dateKey(selectedDate);
   data.days[key] = (data.days[key] || []).filter((e) => e.id !== id);
@@ -967,6 +1045,22 @@ async function deleteEntry(id) {
 
   await saveData(data);
   await renderTracking();
+}
+
+async function saveGoals(event) {
+  event.preventDefault();
+  const data = await loadData();
+  const goals = {};
+
+  goalsForm.querySelectorAll('.goal-input').forEach((input) => {
+    const key = input.dataset.goalKey;
+    const value = Number.parseFloat(input.value);
+    goals[key] = Number.isFinite(value) ? value : 0;
+  });
+
+  data.goals = normalizeGoalValues(goals);
+  await saveData(data);
+  await renderGoals();
 }
 
 async function saveCustomFood(event) {
@@ -1021,6 +1115,9 @@ async function saveCustomFood(event) {
 }
 
 async function deleteCustomFood(id) {
+  const confirmed = window.confirm('Gericht wirklich löschen?');
+  if (!confirmed) return;
+
   const data = await loadData();
   data.customFoods = (data.customFoods || []).filter((food) => food.id !== id);
 
@@ -1040,6 +1137,7 @@ function initFromHash() {
   const hash = location.hash;
   if (hash === '#/history') setView('history');
   else if (hash === '#/gerichte') setView('customFoods');
+  else if (hash === '#/ziele') setView('goals');
   else setView('tracking');
 }
 
@@ -1056,7 +1154,7 @@ resetDataBtn.addEventListener('click', () => {
 
 navDrawer.querySelectorAll('.nav-item').forEach((btn) => {
   btn.addEventListener('click', () => {
-    void setView(/** @type {'tracking' | 'history'} */ (btn.dataset.view));
+    void setView(/** @type {'tracking' | 'history' | 'customFoods' | 'goals'} */ (btn.dataset.view));
   });
 });
 
@@ -1073,6 +1171,7 @@ nextDayBtn.addEventListener('click', async () => {
 
 addBtn.addEventListener('click', openAddModal);
 entryForm.addEventListener('submit', saveEntry);
+goalsForm.addEventListener('submit', saveGoals);
 customFoodForm.addEventListener('submit', saveCustomFood);
 cancelEntry.addEventListener('click', () => entryModal.close());
 

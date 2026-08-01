@@ -58,16 +58,58 @@
         <table class="history-table">
           <thead>
             <tr>
-              <th>Datum</th>
+              <th>Tag</th>
               <th class="num">kcal</th>
-              <th class="num">g Eiweiß</th>
-              <th class="num">Einträge</th>
+              <th class="num">Prot.</th>
+              <th class="num">Kohlenh.</th>
+              <th class="num">Fett</th>
+              <th class="num">Ballast.</th>
+              <th class="num">Eintr.</th>
             </tr>
           </thead>
           <tbody id="historyBody"></tbody>
         </table>
       </div>
       <p class="empty-state hidden" id="historyEmpty">Noch keine Daten vorhanden.</p>
+    </main>
+
+    <!-- Goals -->
+    <main class="main view hidden" id="viewGoals">
+      <form class="goals-form" id="goalsForm">
+        <div class="goals-form-header">
+          <h2>Tagesziele</h2>
+          <p>Lege deine täglichen Ziele für alle Nährwerte fest.</p>
+        </div>
+
+        <label class="field">
+          <span>Kalorien (kcal)</span>
+          <input type="number" class="goal-input" data-goal-key="kcal" min="0" step="1" inputmode="numeric" placeholder="2200">
+        </label>
+
+        <label class="field">
+          <span>Protein (g)</span>
+          <input type="number" class="goal-input" data-goal-key="protein" min="0" step="0.1" inputmode="numeric" placeholder="120">
+        </label>
+
+        <label class="field">
+          <span>Kohlenhydrate (g)</span>
+          <input type="number" class="goal-input" data-goal-key="carbs" min="0" step="0.1" inputmode="numeric" placeholder="240">
+        </label>
+
+        <label class="field">
+          <span>Fett (g)</span>
+          <input type="number" class="goal-input" data-goal-key="fat" min="0" step="0.1" inputmode="numeric" placeholder="80">
+        </label>
+
+        <label class="field">
+          <span>Ballaststoffe (g)</span>
+          <input type="number" class="goal-input" data-goal-key="fiber" min="0" step="0.1" inputmode="numeric" placeholder="30">
+        </label>
+
+        <button type="submit" class="btn btn-primary">Ziele speichern</button>
+      </form>
+
+      <div class="goals-overview" id="goalsOverview"></div>
     </main>
 
     <!-- Custom foods -->
@@ -122,6 +164,7 @@
   <nav class="nav-drawer" id="navDrawer" aria-label="Navigation">
     <p class="nav-title">Kalorien Tracker</p>
     <button type="button" class="nav-item active" data-view="tracking">Tracking</button>
+    <button type="button" class="nav-item" data-view="goals">Ziele</button>
     <button type="button" class="nav-item" data-view="customFoods">Gerichte</button>
     <button type="button" class="nav-item" data-view="history">Übersicht</button>
     <button type="button" class="nav-reset" id="resetDataBtn">Daten löschen</button>

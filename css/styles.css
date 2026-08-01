@@ -1,12 +1,12 @@
 :root {
-  --bg: #0f0f1a;
-  --surface: #1a1a2e;
-  --surface-2: #252540;
-  --accent: #6ee7a0;
+  --bg: #F8FAFC;
+  --surface: #FFFFFF;
+  --surface-2: #ccccd3;
+  --accent: #EC4899;
   --accent-dim: #3d9970;
   --over: #f87171;
-  --text: #f0f0f5;
-  --text-muted: #9898b0;
+  --text: #111827;
+  --text-muted: #6c6c7e;
   --radius: 16px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -242,24 +242,28 @@ body {
 .table-wrap {
   background: var(--surface);
   border-radius: var(--radius);
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 .history-table {
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
   font-size: 0.95rem;
 }
 
 .history-table th,
 .history-table td {
-  padding: 14px 16px;
+  padding: 10px 8px;
   text-align: left;
   border-bottom: 1px solid var(--surface-2);
+  white-space: nowrap;
 }
 
 .history-table th {
-  font-size: 0.75rem;
+  font-size: 0.65rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-muted);
@@ -270,6 +274,15 @@ body {
 .history-table td.num {
   text-align: right;
   white-space: nowrap;
+  min-width: 52px;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+.history-table th:first-child,
+.history-table td:first-child {
+  min-width: 56px;
+  padding-right: 6px;
 }
 
 .history-table tbody tr {
@@ -453,11 +466,84 @@ body {
   display: none;
 }
 
+.goals-form,
 .custom-food-form {
   background: var(--surface);
   border-radius: var(--radius);
   padding: 16px;
   margin-bottom: 16px;
+}
+
+.goals-form-header {
+  margin-bottom: 16px;
+}
+
+.goals-form-header h2 {
+  font-size: 1.1rem;
+  margin-bottom: 4px;
+}
+
+.goals-form-header p {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.goals-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.goal-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.goal-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.goal-card h3 {
+  font-size: 1rem;
+  margin-bottom: 4px;
+}
+
+.goal-card p,
+.goal-meta {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.goal-pill {
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.goal-progress {
+  margin: 12px 0 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.25);
+  overflow: hidden;
+}
+
+.goal-progress-bar {
+  height: 100%;
+  border-radius: inherit;
+}
+
+.goal-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .custom-food-list {
@@ -581,7 +667,7 @@ body {
   border: 1px solid transparent;
   border-radius: 10px;
   padding: 12px 14px;
-  color: var(--text);
+  color: #1f1f20;
   font-size: 1rem;
   font-family: inherit;
   outline: none;
