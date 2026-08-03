@@ -1,18 +1,12 @@
 import { buildGoalRows, formatGoalPercent, normalizeGoalValues } from './goals.mjs';
 import { upsertCustomFood } from './custom-foods.mjs';
+import { MEAL_ORDER, MEAL_LABELS, normalizeMealValue, guessMealByTime } from './meal-utils.mjs';
 
 const STORAGE_KEY = 'kalorien-tracker-v1';
 const DB_NAME = 'kalorien-tracker';
 const DB_VERSION = 1;
 const DB_STORE = 'days';
 const DB_STORE_CUSTOM_FOODS = 'custom-foods';
-const MEAL_ORDER = ['frühstück', 'mittag', 'abend', 'snack'];
-const MEAL_LABELS = {
-  frühstück: 'Frühstück',
-  mittag: 'Mittag',
-  abend: 'Abend',
-  snack: 'Snack',
-};
 const SUPABASE_CONFIG = window.SUPABASE_CONFIG || {};
 const SUPABASE_URL = SUPABASE_CONFIG.url || 'https://eipttbdhaqyspkhqoqur.supabase.co';
 const SUPABASE_ANON_KEY = SUPABASE_CONFIG.anonKey || '';
@@ -367,6 +361,7 @@ const addBtn = document.getElementById('addBtn');
 const entryModal = document.getElementById('entryModal');
 const entryForm = document.getElementById('entryForm');
 const mealSelect = document.getElementById('mealSelect');
+const mealPicker = document.getElementById('mealPicker');
 const pageTitle = document.getElementById('pageTitle');
 const goalsForm = document.getElementById('goalsForm');
 const goalsOverview = document.getElementById('goalsOverview');
@@ -498,13 +493,11 @@ function renderSearchResults(results) {
     emptyItem.className = 'search-result-item search-result-empty';
     emptyItem.textContent = 'Keine Vorschläge gefunden';
     foodSearchResults.appendChild(emptyItem);
-    foodSearchResults.classList.remove('hidden');
-    foodName.setAttribute('aria-expanded', 'true');
+    setSearchResultsVisible(true);
     return;
   }
 
-  foodSearchResults.classList.remove('hidden');
-  foodName.setAttribute('aria-expanded', 'true');
+  setSearchResultsVisible(true);
 
   for (const result of results) {
     const item = document.createElement('button');
@@ -535,6 +528,11 @@ function clearSearchResults() {
   foodSearchResults.innerHTML = '';
   foodSearchResults.classList.add('hidden');
   foodName.setAttribute('aria-expanded', 'false');
+}
+
+function setSearchResultsVisible(visible) {
+  foodSearchResults.classList.toggle('hidden', !visible);
+  foodName.setAttribute('aria-expanded', String(visible));
 }
 
 function parseNumericValue(value) {
@@ -585,6 +583,7 @@ function handleFoodNameInput() {
 
   searchTimeout = setTimeout(async () => {
     const results = await searchFood(query);
+    if (foodName.value.trim() !== query) return;
     renderSearchResults(results);
   }, SEARCH_DEBOUNCE);
 }
@@ -954,10 +953,28 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+function renderMealPicker(selectedValue = guessMealByTime()) {
+  mealPicker.innerHTML = '';
+  const normalizedValue = normalizeMealValue(selectedValue);
+  for (const meal of MEAL_ORDER) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = MEAL_LABELS[meal];
+    button.dataset.meal = meal;
+    button.classList.toggle('active', meal === normalizedValue);
+    button.addEventListener('click', () => {
+      mealSelect.value = meal;
+      renderMealPicker(meal);
+    });
+    mealPicker.appendChild(button);
+  }
+  mealSelect.value = normalizedValue;
+}
+
 function openAddModal() {
   editingEntryId = null;
   document.getElementById('modalTitle').textContent = 'Eintrag hinzufügen';
-  mealSelect.value = guessMealByTime();
+  renderMealPicker(guessMealByTime());
   foodName.value = '';
   foodWeight.value = '';
   foodKcal.value = '';
@@ -974,7 +991,7 @@ function openAddModal() {
 function openEditModal(entry) {
   editingEntryId = entry.id;
   document.getElementById('modalTitle').textContent = 'Eintrag bearbeiten';
-  mealSelect.value = entry.meal;
+  renderMealPicker(entry.meal);
   foodName.value = entry.name;
   foodWeight.value = String(entry.weightGrams ?? '');
   foodKcal.value = String(entry.kcal);
@@ -988,14 +1005,6 @@ function openEditModal(entry) {
   setTimeout(() => foodName.focus(), 100);
 }
 
-function guessMealByTime() {
-  const h = new Date().getHours();
-  if (h < 10) return 'frühstück';
-  if (h < 14) return 'mittag';
-  if (h < 18) return 'abend';
-  return 'snack';
-}
-
 async function saveEntry(e) {
   e.preventDefault();
   const name = foodName.value.trim();
@@ -1005,6 +1014,7 @@ async function saveEntry(e) {
   const fat = parseNumericValue(foodFat.value);
   const fiber = parseNumericValue(foodFiber.value);
   const weightGrams = Math.max(parseNumericValue(foodWeight.value), 0);
+  const selectedMeal = normalizeMealValue(mealSelect.value);
   if (!name || !kcal || kcal < 1 || protein < 0 || carbs < 0 || fat < 0 || fiber < 0) return;
 
   const data = await loadData();
@@ -1014,7 +1024,7 @@ async function saveEntry(e) {
   if (editingEntryId) {
     const idx = data.days[key].findIndex((x) => x.id === editingEntryId);
     if (idx !== -1) {
-      data.days[key][idx] = { ...data.days[key][idx], name, kcal, protein, carbs, fat, fiber, weightGrams, meal: mealSelect.value };
+      data.days[key][idx] = { ...data.days[key][idx], name, kcal, protein, carbs, fat, fiber, weightGrams, meal: selectedMeal };
     }
   } else {
     data.days[key].push({
@@ -1026,7 +1036,7 @@ async function saveEntry(e) {
       fat,
       fiber,
       weightGrams,
-      meal: mealSelect.value,
+      meal: selectedMeal,
       createdAt: Date.now(),
     });
   }
@@ -1199,6 +1209,13 @@ document.addEventListener('click', (event) => {
   }
 });
 
+foodName.addEventListener('focus', () => {
+  const query = foodName.value.trim();
+  if (query.length >= FOOD_SEARCH_MIN) {
+    handleFoodNameInput();
+  }
+});
+
 entryModal.addEventListener('click', (e) => {
   if (e.target === entryModal) entryModal.close();
 });
@@ -1207,4 +1224,5 @@ entryModal.addEventListener('close', clearSearchResults);
 
 window.addEventListener('hashchange', initFromHash);
 
+renderMealPicker(guessMealByTime());
 initFromHash();

@@ -177,12 +177,8 @@
 
       <label class="field">
         <span>Mahlzeit</span>
-        <select id="mealSelect" required>
-          <option value="frühstück">Frühstück</option>
-          <option value="mittag">Mittag</option>
-          <option value="abend">Abend</option>
-          <option value="snack">Snack</option>
-        </select>
+        <div class="meal-picker" id="mealPicker" role="group" aria-label="Mahlzeit auswählen"></div>
+        <input type="hidden" id="mealSelect" value="frühstück">
       </label>
 
       <label class="field">

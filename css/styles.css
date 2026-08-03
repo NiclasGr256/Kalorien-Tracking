@@ -628,6 +628,29 @@ body {
 }
 
 /* Modal */
+.meal-picker {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.meal-picker button {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 10px 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.meal-picker button.active {
+  background: var(--accent);
+  color: var(--bg);
+}
+
 .modal {
   border: none;
   padding: 0;
@@ -670,6 +693,7 @@ body {
   flex-direction: column;
   gap: 6px;
   margin-bottom: 16px;
+  position: relative;
 }
 
 .field span {
@@ -705,16 +729,16 @@ body {
 }
 
 .search-results {
-  position: absolute;
-  z-index: 50;
+  display: block;
   width: 100%;
-  max-height: 260px;
+  max-height: min(220px, 40dvh);
   overflow-y: auto;
   background: var(--surface);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 12px;
-  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.25);
-  margin-top: 6px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+  margin-top: 8px;
+  z-index: 20;
 }
 
 .search-result-item {
