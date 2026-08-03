@@ -6,9 +6,19 @@ export const GOAL_NUTRIENTS = [
   { key: 'fiber', label: 'Ballaststoffe', unit: 'g' },
 ];
 
+export function parseNumericInput(value) {
+  if (value == null) return 0;
+
+  const text = String(value).trim().replace(/,/, '.');
+  if (!text) return 0;
+
+  const parsed = Number.parseFloat(text);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 export function normalizeGoalValues(goals = {}) {
   return GOAL_NUTRIENTS.reduce((acc, nutrient) => {
-    const value = Number(goals[nutrient.key]);
+    const value = parseNumericInput(goals[nutrient.key]);
     acc[nutrient.key] = Number.isFinite(value) ? value : 0;
     return acc;
   }, {});

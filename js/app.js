@@ -536,7 +536,10 @@ function clearSearchResults() {
 }
 
 function parseNumericValue(value) {
-  const parsed = Number.parseFloat(value);
+  if (value == null) return 0;
+
+  const text = String(value).trim().replace(/,/, '.');
+  const parsed = Number.parseFloat(text);
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
@@ -990,12 +993,12 @@ function guessMealByTime() {
 async function saveEntry(e) {
   e.preventDefault();
   const name = foodName.value.trim();
-  const kcal = parseInt(foodKcal.value, 10);
-  const protein = parseFloat(foodProtein.value) || 0;
-  const carbs = parseFloat(foodCarbs.value) || 0;
-  const fat = parseFloat(foodFat.value) || 0;
-  const fiber = parseFloat(foodFiber.value) || 0;
-  const weightGrams = parseInt(foodWeight.value, 10) || 0;
+  const kcal = parseNumericValue(foodKcal.value);
+  const protein = parseNumericValue(foodProtein.value);
+  const carbs = parseNumericValue(foodCarbs.value);
+  const fat = parseNumericValue(foodFat.value);
+  const fiber = parseNumericValue(foodFiber.value);
+  const weightGrams = Math.max(parseNumericValue(foodWeight.value), 0);
   if (!name || !kcal || kcal < 1 || protein < 0 || carbs < 0 || fat < 0 || fiber < 0) return;
 
   const data = await loadData();
@@ -1054,7 +1057,7 @@ async function saveGoals(event) {
 
   goalsForm.querySelectorAll('.goal-input').forEach((input) => {
     const key = input.dataset.goalKey;
-    const value = Number.parseFloat(input.value);
+    const value = parseNumericValue(input.value);
     goals[key] = Number.isFinite(value) ? value : 0;
   });
 
@@ -1066,12 +1069,12 @@ async function saveGoals(event) {
 async function saveCustomFood(event) {
   event.preventDefault();
   const name = customFoodName.value.trim();
-  const weightGrams = parseInt(customFoodWeight.value, 10) || 100;
-  const kcal = parseFloat(customFoodKcal.value) || 0;
-  const protein = parseFloat(customFoodProtein.value) || 0;
-  const carbs = parseFloat(customFoodCarbs.value) || 0;
-  const fat = parseFloat(customFoodFat.value) || 0;
-  const fiber = parseFloat(customFoodFiber.value) || 0;
+  const weightGrams = Math.max(parseNumericValue(customFoodWeight.value), 0) || 100;
+  const kcal = parseNumericValue(customFoodKcal.value);
+  const protein = parseNumericValue(customFoodProtein.value);
+  const carbs = parseNumericValue(customFoodCarbs.value);
+  const fat = parseNumericValue(customFoodFat.value);
+  const fiber = parseNumericValue(customFoodFiber.value);
 
   if (!name || kcal < 0 || protein < 0 || carbs < 0 || fat < 0 || fiber < 0) return;
 
