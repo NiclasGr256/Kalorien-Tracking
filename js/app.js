@@ -1,6 +1,112 @@
-import { buildGoalRows, formatGoalPercent, normalizeGoalValues } from './goals.mjs';
-import { upsertCustomFood } from './custom-foods.mjs';
-import { MEAL_ORDER, MEAL_LABELS, normalizeMealValue, guessMealByTime } from './meal-utils.mjs';
+const GOAL_NUTRIENTS = [
+  { key: 'kcal', label: 'Kalorien', unit: 'kcal' },
+  { key: 'protein', label: 'Protein', unit: 'g' },
+  { key: 'carbs', label: 'Kohlenhydrate', unit: 'g' },
+  { key: 'fat', label: 'Fett', unit: 'g' },
+  { key: 'fiber', label: 'Ballaststoffe', unit: 'g' },
+];
+
+function parseNumericInput(value) {
+  if (value == null) return 0;
+  const text = String(value).trim().replace(/,/, '.');
+  if (!text) return 0;
+  const parsed = Number.parseFloat(text);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeGoalValues(goals = {}) {
+  return GOAL_NUTRIENTS.reduce((acc, nutrient) => {
+    const value = parseNumericInput(goals[nutrient.key]);
+    acc[nutrient.key] = Number.isFinite(value) ? value : 0;
+    return acc;
+  }, {});
+}
+
+function getGoalProgress(actual, goal) {
+  if (!goal || goal <= 0) return null;
+  return actual / goal;
+}
+
+function getGoalColor(progress) {
+  if (progress == null) return '#8B93A7';
+  if (progress < 0.7) return '#FF073A';
+  if (progress < 0.9) return '#ffae00';
+  if (progress <= 1.05) return '#39FF14';
+  return '#00E5FF';
+}
+
+function buildGoalRows(actuals = {}, goals = {}) {
+  const normalizedGoals = normalizeGoalValues(goals);
+  return GOAL_NUTRIENTS.map((nutrient) => {
+    const actual = Number(actuals[nutrient.key]) || 0;
+    const goal = Number(normalizedGoals[nutrient.key]) || 0;
+    const progress = getGoalProgress(actual, goal);
+    const percent = progress == null ? null : progress * 100;
+    return {
+      ...nutrient,
+      actual,
+      goal,
+      progress,
+      percent,
+      color: getGoalColor(progress),
+      progressWidth: percent == null ? 0 : Math.min(100, Math.max(0, percent)),
+    };
+  });
+}
+
+function formatGoalPercent(percent) {
+  if (percent == null) return '—';
+  return `${percent.toFixed(0)}%`;
+}
+
+function upsertCustomFood(data, foodInput, existingId = null) {
+  const normalized = {
+    ...data,
+    customFoods: Array.isArray(data?.customFoods) ? [...data.customFoods] : [],
+  };
+
+  const payload = {
+    id: existingId || crypto.randomUUID(),
+    name: foodInput.name?.trim() || 'Unbenannt',
+    weightGrams: Number(foodInput.weightGrams) > 0 ? Number(foodInput.weightGrams) : 100,
+    kcal: Number(foodInput.kcal) || 0,
+    protein: Number(foodInput.protein) || 0,
+    carbs: Number(foodInput.carbs) || 0,
+    fat: Number(foodInput.fat) || 0,
+    fiber: Number(foodInput.fiber) || 0,
+  };
+
+  if (existingId) {
+    const index = normalized.customFoods.findIndex((food) => food.id === existingId);
+    if (index >= 0) {
+      normalized.customFoods[index] = payload;
+      return normalized;
+    }
+  }
+
+  normalized.customFoods.push(payload);
+  return normalized;
+}
+
+const MEAL_ORDER = ['frühstück', 'mittag', 'abend', 'snack'];
+const MEAL_LABELS = {
+  frühstück: 'Frühstück',
+  mittag: 'Mittag',
+  abend: 'Abend',
+  snack: 'Snack',
+};
+
+function normalizeMealValue(value) {
+  return MEAL_ORDER.includes(value) ? value : 'snack';
+}
+
+function guessMealByTime(now = new Date()) {
+  const hour = now.getHours();
+  if (hour < 10) return 'frühstück';
+  if (hour < 14) return 'mittag';
+  if (hour < 18) return 'abend';
+  return 'snack';
+}
 
 const STORAGE_KEY = 'kalorien-tracker-v1';
 const DB_NAME = 'kalorien-tracker';
