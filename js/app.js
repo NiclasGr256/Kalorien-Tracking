@@ -1,4 +1,5 @@
 import { buildGoalRows, formatGoalPercent, normalizeGoalValues } from './goals.mjs';
+import { upsertCustomFood } from './custom-foods.mjs';
 
 const STORAGE_KEY = 'kalorien-tracker-v1';
 const DB_NAME = 'kalorien-tracker';
@@ -68,6 +69,7 @@ let currentView = 'tracking';
 let selectedDate = startOfDay(new Date());
 /** @type {string|null} */
 let editingEntryId = null;
+let editingCustomFoodId = null;
 
 async function openDb() {
   if (!window.indexedDB) return null;
@@ -843,9 +845,13 @@ async function renderCustomFoods() {
         <p>${food.weightGrams || 100} g · ${Number(food.kcal) || 0} kcal</p>
         <p>P ${Number(food.protein) || 0} g · F ${Number(food.fat) || 0} g · K ${Number(food.carbs) || 0} g · B ${Number(food.fiber) || 0} g</p>
       </div>
-      <button type="button" data-delete="${food.id}">Entfernen</button>
+      <div class="custom-food-actions">
+        <button type="button" data-edit="${food.id}" aria-label="Bearbeiten">✎</button>
+        <button type="button" data-delete="${food.id}" aria-label="Löschen">✕</button>
+      </div>
     `;
 
+    card.querySelector('[data-edit]').addEventListener('click', () => openEditCustomFoodModal(food));
     card.querySelector('[data-delete]').addEventListener('click', () => deleteCustomFood(food.id));
     customFoodList.appendChild(card);
   }
@@ -1079,41 +1085,18 @@ async function saveCustomFood(event) {
   if (!name || kcal < 0 || protein < 0 || carbs < 0 || fat < 0 || fiber < 0) return;
 
   const data = await loadData();
-  data.customFoods = data.customFoods || [];
-  const id = crypto.randomUUID();
-  const newFood = { id, name, weightGrams, kcal, protein, carbs, fat, fiber };
-  data.customFoods.push(newFood);
+  const updatedData = upsertCustomFood(
+    data,
+    { name, weightGrams, kcal, protein, carbs, fat, fiber },
+    editingCustomFoodId,
+  );
 
-  console.debug('saveCustomFood: saving', newFood);
-  await saveData(data);
-
-  // quick verification: is it present in localStorage?
-  try {
-    const local = loadFromLocalStorage();
-    const foundLocal = (local.customFoods || []).some((f) => f.id === id);
-    if (!foundLocal) console.warn('saveCustomFood: not found in localStorage after save', id);
-    else console.debug('saveCustomFood: found in localStorage', id);
-  } catch (e) {
-    console.warn('saveCustomFood: localStorage check failed', e);
-  }
-
-  // quick server check (non-blocking)
-  if (isSupabaseConfigured()) {
-    (async () => {
-      try {
-        const res = await supabaseRequest(`/custom_foods?id=eq.${encodeURIComponent(id)}&select=id,name,kcal,weight_grams`);
-        if (!res || !Array.isArray(res) || res.length === 0) {
-          console.warn('saveCustomFood: not found on server after save', id);
-        } else {
-          console.debug('saveCustomFood: found on server', id, res[0]);
-        }
-      } catch (e) {
-        console.warn('saveCustomFood: server check failed', e);
-      }
-    })();
-  }
+  await saveData(updatedData);
 
   customFoodForm.reset();
+  editingCustomFoodId = null;
+  const submitButton = customFoodForm.querySelector('button[type="submit"]');
+  if (submitButton) submitButton.textContent = 'Gericht speichern';
   await renderCustomFoods();
 }
 
@@ -1134,6 +1117,29 @@ async function deleteCustomFood(id) {
 
   await saveData(data);
   await renderCustomFoods();
+}
+
+function resetCustomFoodForm() {
+  customFoodForm.reset();
+  editingCustomFoodId = null;
+  const submitButton = customFoodForm.querySelector('button[type="submit"]');
+  if (submitButton) submitButton.textContent = 'Gericht speichern';
+  customFoodName.focus();
+}
+
+function openEditCustomFoodModal(food) {
+  editingCustomFoodId = food.id;
+  customFoodName.value = food.name || '';
+  customFoodWeight.value = String(food.weightGrams || 100);
+  customFoodKcal.value = String(food.kcal || 0);
+  customFoodProtein.value = String(food.protein || 0);
+  customFoodCarbs.value = String(food.carbs || 0);
+  customFoodFat.value = String(food.fat || 0);
+  customFoodFiber.value = String(food.fiber || 0);
+
+  const submitButton = customFoodForm.querySelector('button[type="submit"]');
+  if (submitButton) submitButton.textContent = 'Änderungen speichern';
+  customFoodName.focus();
 }
 
 function initFromHash() {
@@ -1176,6 +1182,11 @@ addBtn.addEventListener('click', openAddModal);
 entryForm.addEventListener('submit', saveEntry);
 goalsForm.addEventListener('submit', saveGoals);
 customFoodForm.addEventListener('submit', saveCustomFood);
+customFoodForm.addEventListener('reset', () => {
+  editingCustomFoodId = null;
+  const submitButton = customFoodForm.querySelector('button[type="submit"]');
+  if (submitButton) submitButton.textContent = 'Gericht speichern';
+});
 cancelEntry.addEventListener('click', () => entryModal.close());
 
 foodName.addEventListener('input', handleFoodNameInput);

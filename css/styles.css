@@ -573,13 +573,30 @@ body {
   margin-top: 2px;
 }
 
-.custom-food-card button {
+.custom-food-actions {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.custom-food-actions button {
+  width: 36px;
+  height: 36px;
   border: none;
   background: var(--surface-2);
-  color: var(--over);
-  padding: 8px 10px;
+  color: var(--text-muted);
   border-radius: 8px;
+  font-size: 0.9rem;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.custom-food-actions button:active {
+  background: #333355;
+}
+
+.custom-food-actions button[data-delete] {
+  color: var(--over);
 }
 
 /* FAB */
