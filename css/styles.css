@@ -632,23 +632,36 @@ body {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
+  touch-action: manipulation;
 }
 
 .meal-picker button {
-  border: 1px solid transparent;
-  border-radius: 10px;
-  padding: 10px 8px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  padding: 12px 8px;
+  min-height: 46px;
   background: var(--surface-2);
   color: var(--text);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform 0.12s ease, background 0.12s ease, color 0.12s ease;
+}
+
+.meal-picker button:active,
+.meal-picker button:focus-visible {
+  transform: scale(0.98);
+  background: var(--accent-dim);
+  color: var(--bg);
 }
 
 .meal-picker button.active {
   background: var(--accent);
   color: var(--bg);
+  border-color: var(--accent);
 }
 
 .modal {
@@ -681,6 +694,12 @@ body {
   height: 100%;
   position: fixed;
   inset: 0;
+  overflow: hidden;
+}
+
+.modal-content {
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .modal h2 {

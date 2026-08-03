@@ -1068,7 +1068,13 @@ function renderMealPicker(selectedValue = guessMealByTime()) {
     button.textContent = MEAL_LABELS[meal];
     button.dataset.meal = meal;
     button.classList.toggle('active', meal === normalizedValue);
-    button.addEventListener('click', () => {
+    button.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      mealSelect.value = meal;
+      renderMealPicker(meal);
+    });
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
       mealSelect.value = meal;
       renderMealPicker(meal);
     });
