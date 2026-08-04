@@ -837,22 +837,22 @@ body.modal-open {
 @media (max-width: 768px) {
   .app {
     max-width: 100%;
-    padding-bottom: calc(92px + var(--safe-bottom));
+    padding-bottom: calc(96px + var(--safe-bottom));
   }
 
   .fab {
-    right: 20px;
-    bottom: calc(20px + var(--safe-bottom));
-    width: 58px;
-    height: 58px;
+    right: 18px;
+    bottom: calc(18px + var(--safe-bottom));
+    width: 60px;
+    height: 60px;
   }
 
   .modal-content {
     max-width: 100%;
     width: 100%;
     border-radius: 24px 24px 0 0;
-    padding: 20px 16px calc(16px + var(--safe-bottom));
-    max-height: min(92dvh, 100dvh);
+    padding: 18px 14px calc(14px + var(--safe-bottom));
+    max-height: min(94dvh, 100dvh);
     overflow-y: auto;
     overscroll-behavior: contain;
   }
@@ -866,17 +866,18 @@ body.modal-open {
   }
 
   .modal.mobile-sheet .field {
-    margin-bottom: 10px;
+    margin-bottom: 8px;
   }
 
   .modal.mobile-sheet .modal-actions {
-    margin-top: 4px;
+    margin-top: 6px;
+    gap: 8px;
   }
 
   .modal.mobile-sheet .field input,
   .modal.mobile-sheet .field select {
-    min-height: 52px;
-    padding: 14px 15px;
+    min-height: 50px;
+    padding: 13px 14px;
   }
 
   .modal.mobile-sheet .meal-picker {
@@ -886,7 +887,7 @@ body.modal-open {
   .modal.mobile-sheet .meal-picker button {
     min-height: 46px;
     padding: 10px 6px;
-    font-size: 0.9rem;
+    font-size: 0.88rem;
   }
 
   .modal.mobile-sheet .modal-actions {
