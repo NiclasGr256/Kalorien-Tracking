@@ -1,5 +1,16 @@
 -- Supabase SQL für das Kalorien-Tracking
 
+-- Settings table for global config like API keys
+create table if not exists settings (
+  id text primary key,
+  value text not null,
+  updated_at timestamptz not null default now()
+);
+
+alter table settings enable row level security;
+drop policy if exists "Allow anon read/write on settings" on settings;
+create policy "Allow anon read/write on settings" on settings for all using (true) with check (true);
+
 create table if not exists entries (
   id uuid primary key,
   date text not null,

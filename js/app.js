@@ -1,65 +1,7 @@
 import { getEntryFormLayoutMode } from './mobile-entry-utils.mjs';
-
-const GOAL_NUTRIENTS = [
-  { key: 'kcal', label: 'Kalorien', unit: 'kcal' },
-  { key: 'protein', label: 'Protein', unit: 'g' },
-  { key: 'carbs', label: 'Kohlenhydrate', unit: 'g' },
-  { key: 'fat', label: 'Fett', unit: 'g' },
-  { key: 'fiber', label: 'Ballaststoffe', unit: 'g' },
-];
-
-function parseNumericInput(value) {
-  if (value == null) return 0;
-  const text = String(value).trim().replace(/,/, '.');
-  if (!text) return 0;
-  const parsed = Number.parseFloat(text);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function normalizeGoalValues(goals = {}) {
-  return GOAL_NUTRIENTS.reduce((acc, nutrient) => {
-    const value = parseNumericInput(goals[nutrient.key]);
-    acc[nutrient.key] = Number.isFinite(value) ? value : 0;
-    return acc;
-  }, {});
-}
-
-function getGoalProgress(actual, goal) {
-  if (!goal || goal <= 0) return null;
-  return actual / goal;
-}
-
-function getGoalColor(progress) {
-  if (progress == null) return '#8B93A7';
-  if (progress < 0.7) return '#FF073A';
-  if (progress < 0.9) return '#ffae00';
-  if (progress <= 1.05) return '#39FF14';
-  return '#00E5FF';
-}
-
-function buildGoalRows(actuals = {}, goals = {}) {
-  const normalizedGoals = normalizeGoalValues(goals);
-  return GOAL_NUTRIENTS.map((nutrient) => {
-    const actual = Number(actuals[nutrient.key]) || 0;
-    const goal = Number(normalizedGoals[nutrient.key]) || 0;
-    const progress = getGoalProgress(actual, goal);
-    const percent = progress == null ? null : progress * 100;
-    return {
-      ...nutrient,
-      actual,
-      goal,
-      progress,
-      percent,
-      color: getGoalColor(progress),
-      progressWidth: percent == null ? 0 : Math.min(100, Math.max(0, percent)),
-    };
-  });
-}
-
-function formatGoalPercent(percent) {
-  if (percent == null) return '—';
-  return `${percent.toFixed(0)}%`;
-}
+import { callAi } from './ai.mjs';
+import { MEAL_ORDER, MEAL_LABELS, normalizeMealValue, guessMealByTime } from './meal-utils.mjs';
+import { GOAL_NUTRIENTS, normalizeGoalValues, buildGoalRows, formatGoalPercent, parseNumericInput } from './goals.mjs';
 
 function upsertCustomFood(data, foodInput, existingId = null) {
   const normalized = {
@@ -90,25 +32,7 @@ function upsertCustomFood(data, foodInput, existingId = null) {
   return normalized;
 }
 
-const MEAL_ORDER = ['frühstück', 'mittag', 'abend', 'snack'];
-const MEAL_LABELS = {
-  frühstück: 'Frühstück',
-  mittag: 'Mittag',
-  abend: 'Abend',
-  snack: 'Snack',
-};
 
-function normalizeMealValue(value) {
-  return MEAL_ORDER.includes(value) ? value : 'snack';
-}
-
-function guessMealByTime(now = new Date()) {
-  const hour = now.getHours();
-  if (hour < 10) return 'frühstück';
-  if (hour < 14) return 'mittag';
-  if (hour < 18) return 'abend';
-  return 'snack';
-}
 
 const STORAGE_KEY = 'kalorien-tracker-v1';
 const DB_NAME = 'kalorien-tracker';
@@ -226,7 +150,7 @@ async function loadData() {
 
   if (isSupabaseConfigured()) {
     try {
-      const [entriesRows, foodsRows] = await Promise.all([
+      const [entriesRows, foodsRows, settingsRows] = await Promise.all([
         (async () => {
           try {
             return await supabaseRequest('/entries?select=id,date,meal,name,kcal,protein,carbs,fat,fiber,weight_grams,created_at&order=created_at.asc');
@@ -243,7 +167,17 @@ async function loadData() {
             return await supabaseRequest('/custom_foods?select=id,name,weight_grams,kcal,protein,carbs,fat');
           }
         })(),
+        supabaseRequest('/settings?select=id,value'),
       ]);
+
+      // Handle settings (API Key)
+      if (Array.isArray(settingsRows)) {
+        const keySetting = settingsRows.find(s => s.id === 'openai_api_key');
+        if (keySetting && keySetting.value) {
+          aiApiKey = keySetting.value;
+          localStorage.setItem('openai_api_key', aiApiKey);
+        }
+      }
 
       const days = {};
       const entryRows = Array.isArray(entriesRows) ? entriesRows : [];
@@ -494,6 +428,14 @@ const totalProteinEl = document.getElementById('totalProtein');
 const totalMacrosEl = document.getElementById('totalMacros');
 const cancelEntry = document.getElementById('cancelEntry');
 const resetDataBtn = document.getElementById('resetDataBtn');
+const aiMessages = document.getElementById('aiMessages');
+const aiInput = document.getElementById('aiInput');
+const aiSendBtn = document.getElementById('aiSendBtn');
+const aiAttachBtn = document.getElementById('aiAttachBtn');
+const aiImageInput = document.getElementById('aiImageInput');
+const aiImagePreview = document.getElementById('aiImagePreview');
+const aiRemoveImageBtn = document.getElementById('aiRemoveImageBtn');
+const viewAiChat = document.getElementById('viewAiChat');
 const appEl = document.getElementById('app');
 const FOOD_SEARCH_MIN = 3;
 const SEARCH_DEBOUNCE = 300;
@@ -501,6 +443,20 @@ const SEARCH_PAGE_SIZE = 20;
 let searchTimeout = null;
 let searchAbortController = null;
 let selectedFoodBaseNutrition = null;
+let aiApiKey = localStorage.getItem('openai_api_key') || '';
+let pendingImageBase64 = null;
+let chatHistory = [
+  {
+    role: 'system',
+    content: `Du bist ein hilfreicher Assistent für einen Kalorien-Tracker.
+Deine Aufgabe ist es, dem Nutzer zu helfen, seine Mahlzeiten und Ziele zu verwalten.
+Aktuelles Datum: ${new Date().toLocaleDateString('de-DE')}.
+Nutze die bereitgestellten Tools, um Einträge hinzuzufügen, Ziele zu setzen oder Einträge zu löschen.
+Wenn der Nutzer etwas isst, frage ggf. nach der Menge, wenn sie nicht genannt wurde, oder schätze sie realistisch.
+Du kannst auch Bilder von Essen analysieren. Schätze die Portionen und Nährwerte so genau wie möglich basierend auf dem Bild.
+Antworte immer freundlich und präzise auf Deutsch.`
+  }
+];
 
 function startOfDay(d) {
   const copy = new Date(d);
@@ -807,27 +763,30 @@ async function setView(view) {
   const isCustomFoods = view === 'customFoods';
   const isHistory = view === 'history';
   const isGoals = view === 'goals';
+  const isAiChat = view === 'aiChat';
 
   viewTracking.classList.toggle('hidden', !isTracking);
   viewHistory.classList.toggle('hidden', !isHistory);
   viewCustomFoods.classList.toggle('hidden', !isCustomFoods);
   viewGoals.classList.toggle('hidden', !isGoals);
+  viewAiChat.classList.toggle('hidden', !isAiChat);
   headerTracking.classList.toggle('hidden', !isTracking);
-  headerHistory.classList.toggle('hidden', !isHistory && !isCustomFoods && !isGoals);
+  headerHistory.classList.toggle('hidden', !isHistory && !isCustomFoods && !isGoals && !isAiChat);
   addBtn.classList.toggle('hidden', !isTracking);
   appEl.classList.toggle('app--no-fab', !isTracking);
 
-  pageTitle.textContent = isHistory ? 'Übersicht' : isCustomFoods ? 'Gerichte' : isGoals ? 'Ziele' : 'Übersicht';
+  pageTitle.textContent = isHistory ? 'Übersicht' : isCustomFoods ? 'Gerichte' : isGoals ? 'Ziele' : isAiChat ? 'KI Chat' : 'Übersicht';
 
   navDrawer.querySelectorAll('.nav-item').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.view === view);
   });
 
-  location.hash = view === 'history' ? '#/history' : view === 'customFoods' ? '#/gerichte' : view === 'goals' ? '#/ziele' : '#/';
+  location.hash = view === 'history' ? '#/history' : view === 'customFoods' ? '#/gerichte' : view === 'goals' ? '#/ziele' : view === 'aiChat' ? '#/ki-chat' : '#/';
 
   if (isTracking) await renderTracking();
   else if (isCustomFoods) await renderCustomFoods();
   else if (isGoals) await renderGoals();
+  else if (isAiChat) await renderAiChat();
   else await renderHistory();
 
   closeNav();
@@ -1274,11 +1233,184 @@ function openEditCustomFoodModal(food) {
   customFoodName.focus();
 }
 
+async function renderAiChat() {
+  // Chat view doesn't need specific data loading here as it's handled by messages
+  aiInput.focus();
+}
+
+function appendMessage(role, content) {
+  const msgEl = document.createElement('div');
+  msgEl.className = `message ${role}`;
+  msgEl.innerHTML = `<p>${escapeHtml(content).replace(/\n/g, '<br>')}</p>`;
+  aiMessages.appendChild(msgEl);
+  aiMessages.scrollTop = aiMessages.scrollHeight;
+}
+
+async function handleAiMessage() {
+  const text = aiInput.value.trim();
+  if (!text && !pendingImageBase64) return;
+
+  if (!aiApiKey) {
+    if (text.startsWith('sk-')) {
+      aiApiKey = text;
+      localStorage.setItem('openai_api_key', aiApiKey);
+      
+      // Save to Supabase for cross-device sync
+      if (isSupabaseConfigured()) {
+        try {
+          await supabaseRequest('/settings?on_conflict=id', {
+            method: 'POST',
+            body: [{ id: 'openai_api_key', value: aiApiKey }]
+          });
+          appendMessage('system', 'API-Key sicher in der Cloud gespeichert und auf allen Geräten verfügbar!');
+        } catch (e) {
+          console.warn('Failed to save key to Supabase', e);
+          appendMessage('system', 'API-Key lokal gespeichert (Cloud-Sync fehlgeschlagen).');
+        }
+      } else {
+        appendMessage('system', 'API-Key lokal gespeichert!');
+      }
+
+      aiInput.value = '';
+      return;
+    } else {
+      appendMessage('user', text || 'Bild gesendet');
+      appendMessage('assistant', 'Bitte gib zuerst deinen OpenAI API-Key ein (beginnend mit sk-).');
+      aiInput.value = '';
+      return;
+    }
+  }
+
+  const userMessageContent = [];
+  if (text) userMessageContent.push({ type: 'text', text: text });
+  if (pendingImageBase64) {
+    userMessageContent.push({
+      type: 'image_url',
+      image_url: { url: pendingImageBase64 }
+    });
+  }
+
+  appendMessage('user', text || 'Bild wird analysiert...');
+  aiInput.value = '';
+  const currentPendingImage = pendingImageBase64;
+  clearPendingImage();
+
+  chatHistory.push({ role: 'user', content: userMessageContent });
+
+  try {
+    const data = await callAi(chatHistory, aiApiKey);
+    const choice = data.choices[0];
+    const message = choice.message;
+
+    if (message.tool_calls) {
+      for (const toolCall of message.tool_calls) {
+        const result = await executeTool(toolCall);
+        chatHistory.push(message);
+        chatHistory.push({
+          tool_call_id: toolCall.id,
+          role: 'tool',
+          name: toolCall.function.name,
+          content: JSON.stringify(result)
+        });
+      }
+      // Call AI again with tool results
+      const secondData = await callAi(chatHistory, aiApiKey);
+      const secondMessage = secondData.choices[0].message;
+      appendMessage('assistant', secondMessage.content);
+      chatHistory.push(secondMessage);
+    } else {
+      appendMessage('assistant', message.content);
+      chatHistory.push(message);
+    }
+  } catch (error) {
+    appendMessage('system', `Fehler: ${error.message}`);
+  }
+}
+
+function clearPendingImage() {
+  pendingImageBase64 = null;
+  aiImagePreview.classList.add('hidden');
+  aiImagePreview.querySelector('img').src = '';
+  aiImageInput.value = '';
+}
+
+async function handleImageSelect(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    pendingImageBase64 = event.target.result;
+    aiImagePreview.querySelector('img').src = pendingImageBase64;
+    aiImagePreview.classList.remove('hidden');
+  };
+  reader.readAsDataURL(file);
+}
+
+async function executeTool(toolCall) {
+  const name = toolCall.function.name;
+  const args = JSON.parse(toolCall.function.arguments);
+
+  if (name === 'add_entry') {
+    const data = await loadData();
+    const entry = {
+      id: crypto.randomUUID(),
+      name: args.name,
+      kcal: args.kcal,
+      protein: args.protein || 0,
+      carbs: args.carbs || 0,
+      fat: args.fat || 0,
+      fiber: args.fiber || 0,
+      weightGrams: args.weightGrams || 100,
+      meal: args.meal || 'snack',
+      createdAt: Date.now()
+    };
+    const key = args.date;
+    if (!data.days[key]) data.days[key] = [];
+    data.days[key].push(entry);
+    await saveData(data);
+    return { success: true, entryId: entry.id };
+  }
+
+  if (name === 'set_goals') {
+    const data = await loadData();
+    data.goals = { ...data.goals, ...args };
+    await saveData(data);
+    return { success: true };
+  }
+
+    if (name === 'delete_entry') {
+    const data = await loadData();
+    const key = args.date;
+    if (data.days[key]) {
+      data.days[key] = data.days[key].filter(e => e.id !== args.id);
+      await saveData(data);
+      return { success: true };
+    }
+    return { success: false, error: 'Tag nicht gefunden' };
+  }
+
+  if (name === 'get_data') {
+    const data = await loadData();
+    return data;
+  }
+
+  if (name === 'add_custom_food') {
+    const data = await loadData();
+    const updated = upsertCustomFood(data, args);
+    await saveData(updated);
+    return { success: true };
+  }
+
+  return { error: 'Tool nicht gefunden' };
+}
+
 function initFromHash() {
   const hash = location.hash;
   if (hash === '#/history') setView('history');
   else if (hash === '#/gerichte') setView('customFoods');
   else if (hash === '#/ziele') setView('goals');
+  else if (hash === '#/ki-chat') setView('aiChat');
   else setView('tracking');
 }
 
@@ -1295,7 +1427,7 @@ resetDataBtn.addEventListener('click', () => {
 
 navDrawer.querySelectorAll('.nav-item').forEach((btn) => {
   btn.addEventListener('click', () => {
-    void setView(/** @type {'tracking' | 'history' | 'customFoods' | 'goals'} */ (btn.dataset.view));
+    void setView(/** @type {'tracking' | 'history' | 'customFoods' | 'goals' | 'aiChat'} */ (btn.dataset.view));
   });
 });
 
@@ -1354,6 +1486,14 @@ entryModal.addEventListener('click', (e) => {
 entryModal.addEventListener('close', () => {
   clearSearchResults();
   document.body.classList.remove('modal-open');
+});
+
+aiSendBtn.addEventListener('click', handleAiMessage);
+aiAttachBtn.addEventListener('click', () => aiImageInput.click());
+aiImageInput.addEventListener('change', handleImageSelect);
+aiRemoveImageBtn.addEventListener('click', clearPendingImage);
+aiInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') handleAiMessage();
 });
 
 window.addEventListener('hashchange', initFromHash);

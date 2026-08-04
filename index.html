@@ -159,6 +159,28 @@
       <div class="custom-food-list" id="customFoodList"></div>
     </main>
 
+    <!-- AI Chat -->
+    <main class="main view hidden" id="viewAiChat">
+      <div class="ai-container">
+        <div class="ai-messages" id="aiMessages">
+          <div class="message system">
+            <p>Hallo! Ich bin dein KI-Assistent. Ich kann Einträge für dich anlegen, Ziele ändern oder deine Daten analysieren. </p>
+            <p class="api-key-hint">Um zu starten, hinterlege bitte einen OpenAI API-Key in den Einstellungen oder tippe ihn hier ein.</p>
+          </div>
+        </div>
+                <div class="ai-input-area">
+          <input type="file" id="aiImageInput" accept="image/*" class="hidden">
+          <button type="button" id="aiAttachBtn" class="icon-btn" aria-label="Bild anhängen">📷</button>
+          <input type="text" id="aiInput" placeholder="Z.B. 1 Apfel heute morgen..." autocomplete="off">
+          <button type="button" id="aiSendBtn" class="icon-btn">Send</button>
+        </div>
+        <div id="aiImagePreview" class="ai-image-preview hidden">
+          <img src="" alt="Preview">
+          <button type="button" id="aiRemoveImageBtn">✕</button>
+        </div>
+      </div>
+    </main>
+
     <button type="button" class="fab" id="addBtn" aria-label="Eintrag hinzufügen">+</button>
   </div>
 
@@ -167,9 +189,10 @@
   <nav class="nav-drawer" id="navDrawer" aria-label="Navigation">
     <p class="nav-title">Kalorien Tracker</p>
     <button type="button" class="nav-item active" data-view="tracking">Tracking</button>
-    <button type="button" class="nav-item" data-view="goals">Ziele</button>
+        <button type="button" class="nav-item" data-view="goals">Ziele</button>
     <button type="button" class="nav-item" data-view="customFoods">Gerichte</button>
     <button type="button" class="nav-item" data-view="history">Übersicht</button>
+    <button type="button" class="nav-item" data-view="aiChat">KI Chat</button>
     <button type="button" class="nav-reset" id="resetDataBtn">Daten löschen</button>
   </nav>
 
