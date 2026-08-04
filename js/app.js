@@ -1,7 +1,7 @@
-import { getEntryFormLayoutMode } from './mobile-entry-utils.mjs';
-import { callAi } from './ai.mjs';
-import { MEAL_ORDER, MEAL_LABELS, normalizeMealValue, guessMealByTime } from './meal-utils.mjs';
-import { GOAL_NUTRIENTS, normalizeGoalValues, buildGoalRows, formatGoalPercent, parseNumericInput } from './goals.mjs';
+import { getEntryFormLayoutMode } from './mobile-entry-utils.js';
+import { callAi } from './ai.js';
+import { MEAL_ORDER, MEAL_LABELS, normalizeMealValue, guessMealByTime } from './meal-utils.js';
+import { GOAL_NUTRIENTS, normalizeGoalValues, buildGoalRows, formatGoalPercent, parseNumericInput } from './goals.js';
 
 function upsertCustomFood(data, foodInput, existingId = null) {
   const normalized = {
