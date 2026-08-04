@@ -687,6 +687,14 @@ body.modal-open {
 }
 
 .ai-input-area input[type="text"] {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--surface-2);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font: inherit;
+  outline: none;
+}
 
 .ai-input-area button {
   width: 44px;
