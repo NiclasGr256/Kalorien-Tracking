@@ -1,3 +1,5 @@
+import { getEntryFormLayoutMode } from './mobile-entry-utils.mjs';
+
 const GOAL_NUTRIENTS = [
   { key: 'kcal', label: 'Kalorien', unit: 'kcal' },
   { key: 'protein', label: 'Protein', unit: 'g' },
@@ -533,62 +535,41 @@ function getDayEntries(data, key) {
 async function searchFood(query) {
   if (!query || query.length < FOOD_SEARCH_MIN) return [];
 
-  if (searchAbortController) {
-    searchAbortController.abort();
-  }
+  const normalizedQuery = query.toLowerCase();
+  const customFoodsData = await loadData();
+  const customMatches = (customFoodsData.customFoods || [])
+    .filter((food) => food.name && food.name.toLowerCase().includes(normalizedQuery))
+    .map((food) => ({
+      name: food.name,
+      brand: 'Eigenes Gericht',
+      kcal: Number(food.kcal) || 0,
+      protein: Number(food.protein) || 0,
+      carbs: Number(food.carbs) || 0,
+      fat: Number(food.fat) || 0,
+      fiber: Number(food.fiber) || 0,
+      portionLabel: `${food.weightGrams || 100} g`,
+      isCustomFood: true,
+    }));
 
-  searchAbortController = new AbortController();
-  const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=${SEARCH_PAGE_SIZE}`;
+  return customMatches.slice(0, SEARCH_PAGE_SIZE);
+}
 
-  try {
-    const response = await fetch(url, { signal: searchAbortController.signal });
-    if (!response.ok) return [];
+function applySuggestionSelection(result) {
+  fillFoodFromSuggestion(result);
+  foodName.focus();
+}
 
-    const data = await response.json();
-    const customFoodsData = await loadData();
-    const customMatches = (customFoodsData.customFoods || [])
-      .filter((food) => food.name && food.name.toLowerCase().includes(query.toLowerCase()))
-      .map((food) => ({
-        name: food.name,
-        brand: 'Eigene Rezeptur',
-        kcal: Number(food.kcal) || 0,
-        protein: Number(food.protein) || 0,
-        carbs: Number(food.carbs) || 0,
-        fat: Number(food.fat) || 0,
-        fiber: Number(food.fiber) || 0,
-        portionLabel: `${food.weightGrams || 100} g`,
-        isCustomFood: true,
-      }));
+function positionSearchResults() {
+  if (!foodSearchResults || foodSearchResults.classList.contains('hidden')) return;
 
-    const apiResults = (data.products || [])
-      .map((product) => {
-        const nutriments = product.nutriments || {};
-        const kcal = nutriments['energy-kcal_serving'] ?? nutriments['energy-kcal_100g'] ?? nutriments['energy_100g'] ?? nutriments['energy-kcal'];
-        const protein = nutriments['proteins_serving'] ?? nutriments['proteins_100g'] ?? nutriments['proteins'];
-        const carbs = nutriments['carbohydrates_serving'] ?? nutriments['carbohydrates_100g'] ?? nutriments['carbohydrates'];
-        const fat = nutriments['fat_serving'] ?? nutriments['fat_100g'] ?? nutriments['fat'];
-        const fiber = nutriments['fiber_serving'] ?? nutriments['fiber_100g'] ?? nutriments['fiber'];
-        const portionLabel = nutriments['energy-kcal_serving'] ? product.serving_size || 'Portion' : '100 g';
+  const rect = foodName.getBoundingClientRect();
+  const maxWidth = Math.min(360, window.innerWidth - 24);
+  const left = Math.max(12, Math.min(rect.left, window.innerWidth - maxWidth - 12));
+  const top = Math.min(rect.bottom + 8, window.innerHeight - 220 - 12);
 
-        return {
-          name: product.product_name || product.generic_name || product.brands || 'Unbekanntes Produkt',
-          brand: product.brands || '',
-          kcal: kcal != null ? Number(kcal) : null,
-          protein: protein != null ? Number(protein) : null,
-          carbs: carbs != null ? Number(carbs) : null,
-          fat: fat != null ? Number(fat) : null,
-          fiber: fiber != null ? Number(fiber) : null,
-          portionLabel,
-        };
-      })
-      .filter((item) => item.name);
-
-    return [...customMatches, ...apiResults].slice(0, SEARCH_PAGE_SIZE);
-  } catch (error) {
-    if (error.name === 'AbortError') return [];
-    console.warn('Food search failed', error);
-    return [];
-  }
+  foodSearchResults.style.left = `${left}px`;
+  foodSearchResults.style.top = `${top}px`;
+  foodSearchResults.style.width = `${maxWidth}px`;
 }
 
 function renderSearchResults(results) {
@@ -597,7 +578,7 @@ function renderSearchResults(results) {
   if (!results.length) {
     const emptyItem = document.createElement('div');
     emptyItem.className = 'search-result-item search-result-empty';
-    emptyItem.textContent = 'Keine Vorschläge gefunden';
+    emptyItem.textContent = 'Noch keine eigenen Gerichte gefunden. Lege zuerst ein Gericht unter „Gerichte“ an.';
     foodSearchResults.appendChild(emptyItem);
     setSearchResultsVisible(true);
     return;
@@ -613,8 +594,13 @@ function renderSearchResults(results) {
       <div class="search-result-title">${escapeHtml(result.name)}</div>
       <div class="search-result-meta">${result.brand ? `${escapeHtml(result.brand)} · ` : ''}${result.kcal != null ? `${Math.round(result.kcal)} kcal` : 'Keine kcal'}${result.protein != null ? ` · ${result.protein.toFixed(1)} g Eiweiß` : ''}${result.carbs != null ? ` · ${result.carbs.toFixed(1)} g K` : ''}${result.fat != null ? ` · ${result.fat.toFixed(1)} g F` : ''}${result.fiber != null ? ` · ${result.fiber.toFixed(1)} g Ballaststoffe` : ''}${result.portionLabel ? ` · ${escapeHtml(result.portionLabel)}` : ''}</div>
     `;
-    item.addEventListener('click', () => {
-      fillFoodFromSuggestion(result);
+    item.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      applySuggestionSelection(result);
+    });
+    item.addEventListener('click', (event) => {
+      event.preventDefault();
+      applySuggestionSelection(result);
     });
     foodSearchResults.appendChild(item);
   }
@@ -632,6 +618,9 @@ function clearSearchResults() {
   }
 
   foodSearchResults.innerHTML = '';
+  foodSearchResults.style.left = '';
+  foodSearchResults.style.top = '';
+  foodSearchResults.style.width = '';
   foodSearchResults.classList.add('hidden');
   foodName.setAttribute('aria-expanded', 'false');
 }
@@ -639,6 +628,9 @@ function clearSearchResults() {
 function setSearchResultsVisible(visible) {
   foodSearchResults.classList.toggle('hidden', !visible);
   foodName.setAttribute('aria-expanded', String(visible));
+  if (visible) {
+    requestAnimationFrame(positionSearchResults);
+  }
 }
 
 function parseNumericValue(value) {
@@ -1083,6 +1075,14 @@ function renderMealPicker(selectedValue = guessMealByTime()) {
   mealSelect.value = normalizedValue;
 }
 
+function applyEntryModalLayout() {
+  const width = window.innerWidth || 0;
+  const isTouch = window.matchMedia('(hover: none) and (pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+  const layout = getEntryFormLayoutMode(width, isTouch);
+  entryModal.classList.toggle('mobile-sheet', layout === 'sheet');
+  entryModal.classList.toggle('desktop-dialog', layout === 'dialog');
+}
+
 function openAddModal() {
   editingEntryId = null;
   document.getElementById('modalTitle').textContent = 'Eintrag hinzufügen';
@@ -1096,8 +1096,13 @@ function openAddModal() {
   foodFiber.value = '';
   selectedFoodBaseNutrition = null;
   clearSearchResults();
+  applyEntryModalLayout();
+  document.body.classList.add('modal-open');
   entryModal.showModal();
-  setTimeout(() => foodName.focus(), 100);
+  requestAnimationFrame(() => {
+    foodName.focus();
+    foodName.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  });
 }
 
 function openEditModal(entry) {
@@ -1113,8 +1118,13 @@ function openEditModal(entry) {
   foodFiber.value = String(entry.fiber ?? 0);
   selectedFoodBaseNutrition = null;
   clearSearchResults();
+  applyEntryModalLayout();
+  document.body.classList.add('modal-open');
   entryModal.showModal();
-  setTimeout(() => foodName.focus(), 100);
+  requestAnimationFrame(() => {
+    foodName.focus();
+    foodName.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  });
 }
 
 async function saveEntry(e) {
@@ -1311,6 +1321,15 @@ customFoodForm.addEventListener('reset', () => {
 });
 cancelEntry.addEventListener('click', () => entryModal.close());
 
+window.addEventListener('resize', () => {
+  if (entryModal.open) {
+    applyEntryModalLayout();
+  }
+  if (!foodSearchResults.classList.contains('hidden')) {
+    positionSearchResults();
+  }
+});
+
 foodName.addEventListener('input', handleFoodNameInput);
 foodName.addEventListener('keydown', handleFoodNameKeyDown);
 foodWeight.addEventListener('input', handleWeightInput);
@@ -1332,9 +1351,13 @@ entryModal.addEventListener('click', (e) => {
   if (e.target === entryModal) entryModal.close();
 });
 
-entryModal.addEventListener('close', clearSearchResults);
+entryModal.addEventListener('close', () => {
+  clearSearchResults();
+  document.body.classList.remove('modal-open');
+});
 
 window.addEventListener('hashchange', initFromHash);
 
 renderMealPicker(guessMealByTime());
+applyEntryModalLayout();
 initFromHash();

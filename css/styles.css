@@ -33,6 +33,10 @@ body {
   overscroll-behavior: none;
 }
 
+body.modal-open {
+  overflow: hidden;
+}
+
 .app {
   max-width: 430px;
   margin: 0 auto;
@@ -684,6 +688,9 @@ body {
   width: 100%;
   max-width: 430px;
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
 }
 
 .modal[open] {
@@ -733,6 +740,7 @@ body {
   outline: none;
   -webkit-appearance: none;
   appearance: none;
+  min-height: 48px;
 }
 
 .field input:focus,
@@ -748,22 +756,27 @@ body {
 }
 
 .search-results {
+  position: fixed;
   display: block;
-  width: 100%;
   max-height: min(220px, 40dvh);
   overflow-y: auto;
   background: var(--surface);
   border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 12px;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
-  margin-top: 8px;
-  z-index: 20;
+  border-radius: 14px;
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.16);
+  z-index: 100;
+  backdrop-filter: blur(6px);
 }
 
 .search-result-item {
+  width: 100%;
+  border: none;
+  background: transparent;
   padding: 12px 14px;
   cursor: pointer;
   color: var(--text);
+  text-align: left;
+  font: inherit;
 }
 
 .search-result-item:hover,
@@ -806,6 +819,7 @@ body {
   font-family: inherit;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  min-height: 48px;
 }
 
 .btn-primary {
@@ -816,4 +830,84 @@ body {
 .btn-secondary {
   background: var(--surface-2);
   color: var(--text);
+}
+
+@media (max-width: 768px) {
+  .app {
+    max-width: 100%;
+    padding-bottom: calc(92px + var(--safe-bottom));
+  }
+
+  .fab {
+    right: 20px;
+    bottom: calc(20px + var(--safe-bottom));
+    width: 58px;
+    height: 58px;
+  }
+
+  .modal-content {
+    max-width: 100%;
+    width: 100%;
+    border-radius: 24px 24px 0 0;
+    padding: 20px 16px calc(16px + var(--safe-bottom));
+    max-height: min(92dvh, 100dvh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .modal.mobile-sheet[open] {
+    align-items: flex-end;
+  }
+
+  .modal.mobile-sheet .modal-content {
+    animation: sheet-up 180ms ease;
+  }
+
+  .modal.mobile-sheet .field {
+    margin-bottom: 10px;
+  }
+
+  .modal.mobile-sheet .modal-actions {
+    margin-top: 4px;
+  }
+
+  .modal.mobile-sheet .field input,
+  .modal.mobile-sheet .field select {
+    min-height: 52px;
+    padding: 14px 15px;
+  }
+
+  .modal.mobile-sheet .meal-picker {
+    gap: 8px;
+  }
+
+  .modal.mobile-sheet .meal-picker button {
+    min-height: 48px;
+    padding: 11px 8px;
+  }
+
+  .modal.mobile-sheet .modal-actions {
+    position: sticky;
+    bottom: 0;
+    background: var(--surface);
+    padding-top: 12px;
+    margin-top: 12px;
+    z-index: 2;
+  }
+
+  .modal.mobile-sheet .search-results {
+    max-height: min(36dvh, 220px);
+    border-radius: 14px;
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(12px);
+    opacity: 0.8;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
