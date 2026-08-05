@@ -763,7 +763,7 @@ body.modal-open {
   font-size: 1.2rem;
 }
 
-.ai-input-area input[type="text"] {
+.ai-input-area textarea {
   flex: 1;
   background: var(--bg);
   border: 1px solid var(--surface-2);
@@ -771,6 +771,37 @@ body.modal-open {
   padding: 10px 14px;
   font: inherit;
   outline: none;
+  resize: none;
+  max-height: 120px;
+  min-height: 44px;
+  line-height: 1.4;
+}
+
+.message {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  position: relative;
+}
+
+.message.user {
+  align-self: flex-end;
+  background: var(--accent);
+  color: white;
+  border-bottom-right-radius: 4px;
+  cursor: pointer;
+}
+
+.message.user:hover::after {
+  content: '✎';
+  position: absolute;
+  left: -24px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  font-size: 0.8rem;
 }
 
 .ai-input-area button {

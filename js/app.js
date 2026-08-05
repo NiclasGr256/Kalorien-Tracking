@@ -1374,7 +1374,27 @@ async function renderStatistics() {
 function appendMessage(role, content) {
   const msgEl = document.createElement('div');
   msgEl.className = `message ${role}`;
-  msgEl.innerHTML = `<p>${escapeHtml(content).replace(/\n/g, '<br>')}</p>`;
+  
+  // Handling for complex content (text + images)
+  let textContent = '';
+  if (Array.isArray(content)) {
+    const textPart = content.find(c => c.type === 'text');
+    textContent = textPart ? textPart.text : 'Bild analysiert';
+  } else {
+    textContent = content;
+  }
+
+  msgEl.innerHTML = `<p>${escapeHtml(textContent).replace(/\n/g, '<br>')}</p>`;
+  
+  if (role === 'user') {
+    msgEl.addEventListener('click', () => {
+      aiInput.value = textContent;
+      aiInput.focus();
+      aiInput.style.height = 'auto';
+      aiInput.style.height = aiInput.scrollHeight + 'px';
+    });
+  }
+
   aiMessages.appendChild(msgEl);
   aiMessages.scrollTop = aiMessages.scrollHeight;
 }
@@ -1641,8 +1661,10 @@ aiAttachBtn.addEventListener('click', () => aiImageInput.click());
 aiImageInput.addEventListener('change', handleImageSelect);
 aiRemoveImageBtn.addEventListener('click', clearPendingImage);
 statsRange.addEventListener('change', () => renderStatistics());
-aiInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') handleAiMessage();
+
+aiInput.addEventListener('input', () => {
+  aiInput.style.height = 'auto';
+  aiInput.style.height = (aiInput.scrollHeight) + 'px';
 });
 
 window.addEventListener('hashchange', initFromHash);
