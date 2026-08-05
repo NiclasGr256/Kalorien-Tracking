@@ -448,13 +448,17 @@ let pendingImageBase64 = null;
 let chatHistory = [
   {
     role: 'system',
-    content: `Du bist ein hilfreicher Assistent für einen Kalorien-Tracker.
-Deine Aufgabe ist es, dem Nutzer zu helfen, seine Mahlzeiten und Ziele zu verwalten.
+    content: `Du bist ein intelligenter Ernährungs-Coach für einen Kalorien-Tracker.
 Aktuelles Datum: ${new Date().toLocaleDateString('de-DE')}.
-Nutze die bereitgestellten Tools, um Einträge hinzuzufügen, Ziele zu setzen oder Einträge zu löschen.
-Wenn der Nutzer etwas isst, frage ggf. nach der Menge, wenn sie nicht genannt wurde, oder schätze sie realistisch.
-Du kannst auch Bilder von Essen analysieren. Schätze die Portionen und Nährwerte so genau wie möglich basierend auf dem Bild.
-Antworte immer freundlich und präzise auf Deutsch.`
+
+DEINE REGELN:
+1. KONSISTENZ PRÜFEN: Bevor du einen neuen Eintrag anlegst (add_entry), nutze IMMER zuerst 'get_data', um zu sehen, ob der Nutzer dieses Lebensmittel schon einmal gegessen hat oder ob es in den 'customFoods' existiert. Nutze bevorzugt diese bekannten Nährwerte.
+2. PROAKTIV SEIN: Wenn du Daten abrufst, gib kurzes Feedback (z.B. "Das ist dein zweiter Apfel heute" oder "Damit bist du fast bei deinem Proteinziel").
+3. PRÄZISION: Frage bei ungenauen Angaben ("Ein Brot") nach der Menge oder schätze sie realistisch ein.
+4. BILDANALYSE: Analysiere Bilder von Essen, schätze Portionen und Nährwerte.
+5. BEARBEITEN: Du kannst Einträge mit 'update_entry' ändern, wenn der Nutzer z.B. sagt "Ich habe doch 2 Äpfel gegessen" oder "Ändere das Frühstück von heute auf 500 kcal".
+
+Nutze die bereitgestellten Tools für alle Aktionen. Antworte immer freundlich auf Deutsch.`
   }
 ];
 
@@ -1302,10 +1306,10 @@ async function handleAiMessage() {
     const choice = data.choices[0];
     const message = choice.message;
 
-    if (message.tool_calls) {
+        if (message.tool_calls) {
+      chatHistory.push(message); // Push assistant message first
       for (const toolCall of message.tool_calls) {
         const result = await executeTool(toolCall);
-        chatHistory.push(message);
         chatHistory.push({
           tool_call_id: toolCall.id,
           role: 'tool',
@@ -1395,11 +1399,25 @@ async function executeTool(toolCall) {
     return data;
   }
 
-  if (name === 'add_custom_food') {
+    if (name === 'add_custom_food') {
     const data = await loadData();
     const updated = upsertCustomFood(data, args);
     await saveData(updated);
     return { success: true };
+  }
+
+  if (name === 'update_entry') {
+    const data = await loadData();
+    const key = args.date;
+    if (data.days[key]) {
+      const idx = data.days[key].findIndex(e => e.id === args.id);
+      if (idx !== -1) {
+        data.days[key][idx] = { ...data.days[key][idx], ...args, createdAt: data.days[key][idx].createdAt };
+        await saveData(data);
+        return { success: true };
+      }
+    }
+    return { success: false, error: 'Eintrag nicht gefunden' };
   }
 
   return { error: 'Tool nicht gefunden' };

@@ -87,9 +87,32 @@ export async function callAi(messages, apiKey) {
             required: ['name', 'kcal']
           }
         }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'update_entry',
+          description: 'Aktualisiert einen bestehenden Kalorieneintrag (z.B. Menge oder Name ändern).',
+          parameters: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', description: 'Die ID des zu ändernden Eintrags' },
+              date: { type: 'string', description: 'Das Datum des Eintrags YYYY-MM-DD' },
+              name: { type: 'string' },
+              kcal: { type: 'number' },
+              protein: { type: 'number' },
+              carbs: { type: 'number' },
+              fat: { type: 'number' },
+              fiber: { type: 'number' },
+              weightGrams: { type: 'number' },
+              meal: { type: 'string', enum: ['frühstück', 'mittag', 'abend', 'snack'] }
+            },
+            required: ['id', 'date']
+          }
+        }
       }
-    ],
-    tool_choice: 'auto'
+      ],
+      tool_choice: 'auto'
   };
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
