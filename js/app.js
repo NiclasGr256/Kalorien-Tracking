@@ -1316,19 +1316,23 @@ async function saveGoals(event) {
 async function saveCustomFood(event) {
   event.preventDefault();
   const name = customFoodName.value.trim();
-  const weightGrams = Math.max(parseNumericValue(customFoodWeight.value), 0) || 100;
-  const kcal = parseNumericValue(customFoodKcal.value);
-  const protein = parseNumericValue(customFoodProtein.value);
-  const carbs = parseNumericValue(customFoodCarbs.value);
-  const fat = parseNumericValue(customFoodFat.value);
-  const fiber = parseNumericValue(customFoodFiber.value);
+  const weightInput = Math.max(parseNumericValue(customFoodWeight.value), 0) || 100;
+  
+  // Normalization factor to 100g
+  const factor = 100 / weightInput;
+
+  const kcal = parseNumericValue(customFoodKcal.value) * factor;
+  const protein = parseNumericValue(customFoodProtein.value) * factor;
+  const carbs = parseNumericValue(customFoodCarbs.value) * factor;
+  const fat = parseNumericValue(customFoodFat.value) * factor;
+  const fiber = parseNumericValue(customFoodFiber.value) * factor;
 
   if (!name || kcal < 0 || protein < 0 || carbs < 0 || fat < 0 || fiber < 0) return;
 
   const data = await loadData();
   const updatedData = upsertCustomFood(
     data,
-    { name, weightGrams, kcal, protein, carbs, fat, fiber },
+    { name, weightGrams: 100, kcal, protein, carbs, fat, fiber },
     editingCustomFoodId,
   );
 
