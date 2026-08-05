@@ -105,10 +105,34 @@
           <input type="text" class="goal-input" data-goal-key="fat" inputmode="decimal" enterkeyhint="done" placeholder="80" autocomplete="off">
         </label>
 
-        <label class="field">
+                <label class="field">
           <span>Ballaststoffe (g)</span>
           <input type="text" class="goal-input" data-goal-key="fiber" inputmode="decimal" enterkeyhint="done" placeholder="30" autocomplete="off">
         </label>
+
+        <div class="goals-colors-header">
+          <h3>Farben anpassen</h3>
+          <p>Wähle deine bevorzugten Farben für die Fortschrittsbalken.</p>
+        </div>
+
+        <div class="color-grid">
+          <label class="field field--inline">
+            <span>Unter 70%</span>
+            <input type="color" class="color-input" data-color-key="low" value="#FF073A">
+          </label>
+          <label class="field field--inline">
+            <span>70% - 90%</span>
+            <input type="color" class="color-input" data-color-key="medium" value="#ffae00">
+          </label>
+          <label class="field field--inline">
+            <span>90% - 105%</span>
+            <input type="color" class="color-input" data-color-key="ideal" value="#39FF14">
+          </label>
+          <label class="field field--inline">
+            <span>Über 105%</span>
+            <input type="color" class="color-input" data-color-key="over" value="#00E5FF">
+          </label>
+        </div>
 
         <button type="submit" class="btn btn-primary">Ziele speichern</button>
       </form>

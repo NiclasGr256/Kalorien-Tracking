@@ -242,6 +242,60 @@ body.modal-open {
   background: rgba(248, 113, 113, 0.22);
 }
 
+.goals-colors-header {
+  margin: 24px 0 12px;
+}
+
+.goals-colors-header h3 {
+  font-size: 1rem;
+  margin-bottom: 4px;
+}
+
+.goals-colors-header p {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.color-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.field--inline {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface-2);
+  padding: 10px 14px;
+  border-radius: 10px;
+  margin-bottom: 0;
+}
+
+.field--inline span {
+  font-size: 0.85rem;
+}
+
+.color-input {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+  -webkit-appearance: none;
+}
+
+.color-input::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.color-input::-webkit-color-swatch {
+  border: none;
+  border-radius: 6px;
+}
+
 /* History table */
 .table-wrap {
   background: var(--surface);

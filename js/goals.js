@@ -29,15 +29,22 @@ function getGoalProgress(actual, goal) {
   return actual / goal;
 }
 
-function getGoalColor(progress) {
+const DEFAULT_COLORS = {
+  low: '#FF073A',
+  medium: '#ffae00',
+  ideal: '#39FF14',
+  over: '#00E5FF',
+};
+
+function getGoalColor(progress, colors = DEFAULT_COLORS) {
   if (progress == null) return '#8B93A7';
-  if (progress < 0.7) return '#FF073A';
-  if (progress < 0.9) return '#ffae00';
-  if (progress <= 1.05) return '#39FF14';
-  return '#00E5FF';
+  if (progress < 0.7) return colors.low || DEFAULT_COLORS.low;
+  if (progress < 0.9) return colors.medium || DEFAULT_COLORS.medium;
+  if (progress <= 1.05) return colors.ideal || DEFAULT_COLORS.ideal;
+  return colors.over || DEFAULT_COLORS.over;
 }
 
-export function buildGoalRows(actuals = {}, goals = {}) {
+export function buildGoalRows(actuals = {}, goals = {}, colors = DEFAULT_COLORS) {
   const normalizedGoals = normalizeGoalValues(goals);
 
   return GOAL_NUTRIENTS.map((nutrient) => {
@@ -52,7 +59,7 @@ export function buildGoalRows(actuals = {}, goals = {}) {
       goal,
       progress,
       percent,
-      color: getGoalColor(progress),
+      color: getGoalColor(progress, colors),
       progressWidth: percent == null ? 0 : Math.min(100, Math.max(0, percent)),
     };
   });

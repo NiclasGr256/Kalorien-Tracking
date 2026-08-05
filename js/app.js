@@ -126,6 +126,7 @@ function normalizeData(data) {
     days: data?.days || {},
     customFoods: Array.isArray(data?.customFoods) ? data.customFoods : [],
     goals: data?.goals || {},
+    colors: data?.colors || {},
   };
 }
 
@@ -170,8 +171,10 @@ async function loadData() {
         supabaseRequest('/settings?select=id,value'),
       ]);
 
-            // Handle settings (API Key and Goals)
+      // Handle settings (API Key, Goals, Colors)
       const goals = localData.goals || {};
+      const colors = localData.colors || {};
+      
       if (Array.isArray(settingsRows)) {
         const keySetting = settingsRows.find(s => s.id === 'openai_api_key');
         if (keySetting && keySetting.value) {
@@ -186,6 +189,16 @@ async function loadData() {
             Object.assign(goals, remoteGoals);
           } catch (e) {
             console.warn('Failed to parse remote goals', e);
+          }
+        }
+
+        const colorsSetting = settingsRows.find(s => s.id === 'colors');
+        if (colorsSetting && colorsSetting.value) {
+          try {
+            const remoteColors = JSON.parse(colorsSetting.value);
+            Object.assign(colors, remoteColors);
+          } catch (e) {
+            console.warn('Failed to parse remote colors', e);
           }
         }
       }
@@ -245,7 +258,7 @@ async function loadData() {
         console.warn('Failed merging local data', e);
       }
 
-            return { days, customFoods, goals };
+      return { days, customFoods, goals, colors };
     } catch (error) {
       console.warn('Supabase load failed, falling back to localStorage', error);
       return localData;
@@ -281,7 +294,7 @@ async function loadData() {
       request.onerror = () => reject(request.error);
     });
 
-    return { days: daysData, customFoods: customFoodsData, goals: localData.goals || {} };
+    return { days: daysData, customFoods: customFoodsData, goals: localData.goals || {}, colors: localData.colors || {} };
   } catch (error) {
     console.warn('IndexedDB load failed, falling back to localStorage', error);
     return localData;
@@ -366,11 +379,53 @@ async function saveData(data) {
           console.warn('Failed to save goals to Supabase', err);
         }
       }
+
+      // Save Colors to Supabase
+      if (normalizedData.colors && Object.keys(normalizedData.colors).length > 0) {
+        try {
+          await supabaseRequest('/settings?on_conflict=id', {
+            method: 'POST',
+            body: [{ id: 'colors', value: JSON.stringify(normalizedData.colors) }]
+          });
+        } catch (err) {
+          console.warn('Failed to save colors to Supabase', err);
+        }
+      }
     } catch (error) {
       console.warn('Supabase save failed', error);
     }
     return;
   }
+
+  try {
+    const db = await openDb();
+    if (!db) return;
+
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction([DB_STORE, DB_STORE_CUSTOM_FOODS], 'readwrite');
+      const daysStore = tx.objectStore(DB_STORE);
+      const customFoodsStore = tx.objectStore(DB_STORE_CUSTOM_FOODS);
+
+      daysStore.clear();
+      for (const [date, entries] of Object.entries(normalizedData.days)) {
+        if (entries.length > 0) {
+          daysStore.put({ date, entries });
+        }
+      }
+
+      customFoodsStore.clear();
+      for (const food of normalizedData.customFoods) {
+        customFoodsStore.put(food);
+      }
+
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  } catch (error) {
+    console.warn('IndexedDB save failed', error);
+  }
+}
 
   try {
     const db = await openDb();
@@ -876,6 +931,18 @@ async function renderTracking() {
   totalMacrosEl.textContent = `${totalProtein.toLocaleString('de-DE')} g P · ${totalFat.toLocaleString('de-DE')} g F · ${totalCarbs.toLocaleString('de-DE')} g K · ${totalFiber.toLocaleString('de-DE')} g B`;
   entryCountEl.textContent = formatEntryCount(entries.length);
 
+  // Apply colors to summary total kcal
+  const goals = normalizeGoalValues(data.goals || {});
+  const colors = data.colors || {};
+  const kcalGoal = goals.kcal || 0;
+  if (kcalGoal > 0) {
+    const progress = total / kcalGoal;
+    const color = buildGoalRows({kcal: total}, {kcal: kcalGoal}, colors)[0].color;
+    totalKcalEl.style.color = color;
+  } else {
+    totalKcalEl.style.color = '';
+  }
+
   mealsList.innerHTML = '';
   const grouped = groupByMeal(entries);
 
@@ -913,13 +980,22 @@ async function renderGoals() {
     fiber: sumFiber(entries),
   };
   const goals = normalizeGoalValues(data.goals || {});
-  const rows = buildGoalRows(actuals, goals);
+  const colors = data.colors || {};
+  const rows = buildGoalRows(actuals, goals, colors);
 
   goalsOverview.innerHTML = '';
   goalsForm.querySelectorAll('.goal-input').forEach((input) => {
     const key = input.dataset.goalKey;
     const value = goals[key];
     input.value = value > 0 ? String(value) : '';
+  });
+
+  // Fill color inputs
+  goalsForm.querySelectorAll('.color-input').forEach((input) => {
+    const key = input.dataset.colorKey;
+    if (colors[key]) {
+      input.value = colors[key];
+    }
   });
 
   for (const row of rows) {
@@ -1217,6 +1293,7 @@ async function saveGoals(event) {
   event.preventDefault();
   const data = await loadData();
   const goals = {};
+  const colors = {};
 
   goalsForm.querySelectorAll('.goal-input').forEach((input) => {
     const key = input.dataset.goalKey;
@@ -1224,9 +1301,16 @@ async function saveGoals(event) {
     goals[key] = Number.isFinite(value) ? value : 0;
   });
 
+  goalsForm.querySelectorAll('.color-input').forEach((input) => {
+    const key = input.dataset.colorKey;
+    colors[key] = input.value;
+  });
+
   data.goals = normalizeGoalValues(goals);
+  data.colors = colors;
   await saveData(data);
   await renderGoals();
+  await renderTracking();
 }
 
 async function saveCustomFood(event) {
