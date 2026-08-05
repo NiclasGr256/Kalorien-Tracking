@@ -1710,9 +1710,6 @@ menuBtn.addEventListener('click', () => {
 });
 
 navBackdrop.addEventListener('click', closeNav);
-resetDataBtn.addEventListener('click', () => {
-  void resetAllData();
-});
 
 navDrawer.querySelectorAll('.nav-item').forEach((btn) => {
   btn.addEventListener('click', () => {
