@@ -269,7 +269,19 @@
         <button type="button" class="btn btn-secondary" id="cancelEntry">Abbrechen</button>
         <button type="submit" class="btn btn-primary">Speichern</button>
       </div>
-    </form>
+        </form>
+  </dialog>
+
+  <!-- Confirm Modal -->
+  <dialog class="modal modal--confirm" id="confirmModal">
+    <div class="modal-content">
+      <h2 id="confirmTitle">Löschen bestätigen</h2>
+      <p id="confirmMessage">Möchtest du diesen Eintrag wirklich löschen?</p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="confirmCancel">Abbrechen</button>
+        <button type="button" class="btn btn-primary btn--danger" id="confirmOk">Löschen</button>
+      </div>
+    </div>
   </dialog>
 
   <script>

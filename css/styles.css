@@ -1054,6 +1054,32 @@ body.modal-open {
   color: var(--text);
 }
 
+.btn--danger {
+  background: var(--over) !important;
+  color: white !important;
+}
+
+.modal--confirm .modal-content {
+  border-radius: var(--radius);
+  text-align: center;
+  padding: 24px;
+  max-width: 320px;
+}
+
+.modal--confirm h2 {
+  margin-bottom: 8px;
+}
+
+.modal--confirm p {
+  color: var(--text-muted);
+  margin-bottom: 24px;
+  font-size: 0.95rem;
+}
+
+.modal--confirm[open] {
+  align-items: center;
+}
+
 @media (max-width: 768px) {
   .app {
     max-width: 100%;

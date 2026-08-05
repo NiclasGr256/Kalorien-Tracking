@@ -462,6 +462,9 @@ const viewAiChat = document.getElementById('viewAiChat');
 const viewStatistics = document.getElementById('viewStatistics');
 const statsRange = document.getElementById('statsRange');
 const appEl = document.getElementById('app');
+const confirmModal = document.getElementById('confirmModal');
+const confirmOk = document.getElementById('confirmOk');
+const confirmCancel = document.getElementById('confirmCancel');
 const FOOD_SEARCH_MIN = 3;
 const SEARCH_DEBOUNCE = 300;
 const SEARCH_PAGE_SIZE = 20;
@@ -757,8 +760,36 @@ function closeNav() {
   menuBtn.setAttribute('aria-expanded', 'false');
 }
 
+function showConfirm(title, message) {
+  return new Promise((resolve) => {
+    document.getElementById('confirmTitle').textContent = title;
+    document.getElementById('confirmMessage').textContent = message;
+    
+    const onOk = () => {
+      confirmModal.close();
+      cleanup();
+      resolve(true);
+    };
+    
+    const onCancel = () => {
+      confirmModal.close();
+      cleanup();
+      resolve(false);
+    };
+    
+    const cleanup = () => {
+      confirmOk.removeEventListener('click', onOk);
+      confirmCancel.removeEventListener('click', onCancel);
+    };
+    
+    confirmOk.addEventListener('click', onOk);
+    confirmCancel.addEventListener('click', onCancel);
+    confirmModal.showModal();
+  });
+}
+
 async function resetAllData() {
-  const confirmed = window.confirm('Alle gespeicherten Daten wirklich löschen?');
+  const confirmed = await showConfirm('Daten löschen', 'Alle gespeicherten Daten wirklich löschen?');
   if (!confirmed) return;
 
   try {
@@ -1163,7 +1194,7 @@ async function saveEntry(e) {
 }
 
 async function deleteEntry(id) {
-  const confirmed = window.confirm('Eintrag wirklich löschen?');
+  const confirmed = await showConfirm('Eintrag löschen', 'Diesen Eintrag wirklich löschen?');
   if (!confirmed) return;
 
   const data = await loadData();
@@ -1227,7 +1258,7 @@ async function saveCustomFood(event) {
 }
 
 async function deleteCustomFood(id) {
-  const confirmed = window.confirm('Gericht wirklich löschen?');
+  const confirmed = await showConfirm('Gericht löschen', 'Dieses Gericht wirklich löschen?');
   if (!confirmed) return;
 
   const data = await loadData();
