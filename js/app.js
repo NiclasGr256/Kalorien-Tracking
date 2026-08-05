@@ -397,37 +397,7 @@ async function saveData(data) {
     return;
   }
 
-  try {
-    const db = await openDb();
-    if (!db) return;
-
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction([DB_STORE, DB_STORE_CUSTOM_FOODS], 'readwrite');
-      const daysStore = tx.objectStore(DB_STORE);
-      const customFoodsStore = tx.objectStore(DB_STORE_CUSTOM_FOODS);
-
-      daysStore.clear();
-      for (const [date, entries] of Object.entries(normalizedData.days)) {
-        if (entries.length > 0) {
-          daysStore.put({ date, entries });
-        }
-      }
-
-      customFoodsStore.clear();
-      for (const food of normalizedData.customFoods) {
-        customFoodsStore.put(food);
-      }
-
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-      tx.onabort = () => reject(tx.error);
-    });
-  } catch (error) {
-    console.warn('IndexedDB save failed', error);
-  }
-}
-
-  try {
+    try {
     const db = await openDb();
     if (!db) return;
 
