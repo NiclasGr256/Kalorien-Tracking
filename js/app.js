@@ -804,6 +804,7 @@ async function renderTracking() {
   const totalProtein = sumProtein(entries);
   const totalCarbs = sumCarbs(entries);
   const totalFat = sumFat(entries);
+  const totalFiber = sumFiber(entries);
 
   dateLabel.textContent = formatDateLabel(selectedDate);
   dateSub.textContent = formatDateSub(selectedDate);
@@ -811,7 +812,7 @@ async function renderTracking() {
 
   totalKcalEl.textContent = total.toLocaleString('de-DE');
   totalProteinEl.textContent = totalProtein.toLocaleString('de-DE');
-  totalMacrosEl.textContent = `${totalProtein.toLocaleString('de-DE')} g P · ${totalFat.toLocaleString('de-DE')} g F · ${totalCarbs.toLocaleString('de-DE')} g K`;
+  totalMacrosEl.textContent = `${totalProtein.toLocaleString('de-DE')} g P · ${totalFat.toLocaleString('de-DE')} g F · ${totalCarbs.toLocaleString('de-DE')} g K · ${totalFiber.toLocaleString('de-DE')} g B`;
   entryCountEl.textContent = formatEntryCount(entries.length);
 
   mealsList.innerHTML = '';
