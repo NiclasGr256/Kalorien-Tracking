@@ -36,15 +36,21 @@ const DEFAULT_COLORS = {
   over: '#00E5FF',
 };
 
-function getGoalColor(progress, colors = DEFAULT_COLORS) {
+const DEFAULT_THRESHOLDS = {
+  low: 0.7,
+  medium: 0.9,
+  ideal: 1.05,
+};
+
+function getGoalColor(progress, colors = DEFAULT_COLORS, thresholds = DEFAULT_THRESHOLDS) {
   if (progress == null) return '#8B93A7';
-  if (progress < 0.7) return colors.low || DEFAULT_COLORS.low;
-  if (progress < 0.9) return colors.medium || DEFAULT_COLORS.medium;
-  if (progress <= 1.05) return colors.ideal || DEFAULT_COLORS.ideal;
+  if (progress < (thresholds.low || DEFAULT_THRESHOLDS.low)) return colors.low || DEFAULT_COLORS.low;
+  if (progress < (thresholds.medium || DEFAULT_THRESHOLDS.medium)) return colors.medium || DEFAULT_COLORS.medium;
+  if (progress <= (thresholds.ideal || DEFAULT_THRESHOLDS.ideal)) return colors.ideal || DEFAULT_COLORS.ideal;
   return colors.over || DEFAULT_COLORS.over;
 }
 
-export function buildGoalRows(actuals = {}, goals = {}, colors = DEFAULT_COLORS) {
+export function buildGoalRows(actuals = {}, goals = {}, colors = DEFAULT_COLORS, thresholds = DEFAULT_THRESHOLDS) {
   const normalizedGoals = normalizeGoalValues(goals);
 
   return GOAL_NUTRIENTS.map((nutrient) => {
@@ -59,7 +65,7 @@ export function buildGoalRows(actuals = {}, goals = {}, colors = DEFAULT_COLORS)
       goal,
       progress,
       percent,
-      color: getGoalColor(progress, colors),
+      color: getGoalColor(progress, colors, thresholds),
       progressWidth: percent == null ? 0 : Math.min(100, Math.max(0, percent)),
     };
   });

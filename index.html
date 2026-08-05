@@ -115,23 +115,30 @@
           <p>Wähle deine bevorzugten Farben für die Fortschrittsbalken.</p>
         </div>
 
-        <div class="color-grid">
-          <label class="field field--inline">
-            <span>Unter 70%</span>
+                <div class="threshold-list">
+          <div class="threshold-row">
             <input type="color" class="color-input" data-color-key="low" value="#FF073A">
-          </label>
-          <label class="field field--inline">
-            <span>70% - 90%</span>
+            <span>Unter</span>
+            <input type="number" class="threshold-input" data-threshold-key="low" value="70" min="1" max="200">%
+            <span class="threshold-label">Kritisch / Niedrig</span>
+          </div>
+          <div class="threshold-row">
             <input type="color" class="color-input" data-color-key="medium" value="#ffae00">
-          </label>
-          <label class="field field--inline">
-            <span>90% - 105%</span>
+            <span>Unter</span>
+            <input type="number" class="threshold-input" data-threshold-key="medium" value="90" min="1" max="200">%
+            <span class="threshold-label">Warnung / Mittel</span>
+          </div>
+          <div class="threshold-row">
             <input type="color" class="color-input" data-color-key="ideal" value="#39FF14">
-          </label>
-          <label class="field field--inline">
-            <span>Über 105%</span>
+            <span>Bis zu</span>
+            <input type="number" class="threshold-input" data-threshold-key="ideal" value="105" min="1" max="200">%
+            <span class="threshold-label">Ziel erreicht</span>
+          </div>
+          <div class="threshold-row">
             <input type="color" class="color-input" data-color-key="over" value="#00E5FF">
-          </label>
+            <span>Darüber</span>
+            <span class="threshold-label">Über dem Ziel</span>
+          </div>
         </div>
 
         <button type="submit" class="btn btn-primary">Ziele speichern</button>
@@ -158,17 +165,7 @@
           <input type="text" id="customFoodKcal" placeholder="180" required inputmode="decimal" enterkeyhint="done" autocomplete="off">
         </label>
 
-        <label class="field">
-          <span>Eiweiß (g)</span>
-          <input type="text" id="customFoodProtein" placeholder="12" inputmode="decimal" enterkeyhint="done" autocomplete="off">
-        </label>
-
-        <label class="field">
-          <span>Kohlenhydrate (g)</span>
-          <input type="text" id="customFoodKcal" placeholder="180" required inputmode="decimal" enterkeyhint="done" autocomplete="off">
-        </label>
-
-        <label class="field">
+                <label class="field">
           <span>Eiweiß (g)</span>
           <input type="text" id="customFoodProtein" placeholder="12" inputmode="decimal" enterkeyhint="done" autocomplete="off">
         </label>
@@ -324,6 +321,6 @@
       anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVpcHR0YmRoYXF5c3BraHFvcXVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ3NDM0NjUsImV4cCI6MjEwMDMxOTQ2NX0.UjFQXssAH3vbHg-nYRcS5h-36JZw-3cTmQ-2_f6xQ3c'
     };
   </script>
-  <script src="js/app.js?v=20260804-4" type="module"></script>
+  <script src="js/app.js?v=20260804-5" type="module"></script>
 </body>
 </html>

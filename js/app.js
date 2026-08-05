@@ -127,6 +127,7 @@ function normalizeData(data) {
     customFoods: Array.isArray(data?.customFoods) ? data.customFoods : [],
     goals: data?.goals || {},
     colors: data?.colors || {},
+    thresholds: data?.thresholds || {},
   };
 }
 
@@ -171,9 +172,10 @@ async function loadData() {
         supabaseRequest('/settings?select=id,value'),
       ]);
 
-      // Handle settings (API Key, Goals, Colors)
+            // Handle settings (API Key, Goals, Colors, Thresholds)
       const goals = localData.goals || {};
       const colors = localData.colors || {};
+      const thresholds = localData.thresholds || {};
       
       if (Array.isArray(settingsRows)) {
         const keySetting = settingsRows.find(s => s.id === 'openai_api_key');
@@ -199,6 +201,16 @@ async function loadData() {
             Object.assign(colors, remoteColors);
           } catch (e) {
             console.warn('Failed to parse remote colors', e);
+          }
+        }
+
+        const thresholdsSetting = settingsRows.find(s => s.id === 'thresholds');
+        if (thresholdsSetting && thresholdsSetting.value) {
+          try {
+            const remoteThresholds = JSON.parse(thresholdsSetting.value);
+            Object.assign(thresholds, remoteThresholds);
+          } catch (e) {
+            console.warn('Failed to parse remote thresholds', e);
           }
         }
       }
@@ -258,7 +270,7 @@ async function loadData() {
         console.warn('Failed merging local data', e);
       }
 
-      return { days, customFoods, goals, colors };
+            return { days, customFoods, goals, colors, thresholds };
     } catch (error) {
       console.warn('Supabase load failed, falling back to localStorage', error);
       return localData;
@@ -294,7 +306,7 @@ async function loadData() {
       request.onerror = () => reject(request.error);
     });
 
-    return { days: daysData, customFoods: customFoodsData, goals: localData.goals || {}, colors: localData.colors || {} };
+        return { days: daysData, customFoods: customFoodsData, goals: localData.goals || {}, colors: localData.colors || {}, thresholds: localData.thresholds || {} };
   } catch (error) {
     console.warn('IndexedDB load failed, falling back to localStorage', error);
     return localData;
@@ -380,7 +392,7 @@ async function saveData(data) {
         }
       }
 
-      // Save Colors to Supabase
+            // Save Colors to Supabase
       if (normalizedData.colors && Object.keys(normalizedData.colors).length > 0) {
         try {
           await supabaseRequest('/settings?on_conflict=id', {
@@ -389,6 +401,18 @@ async function saveData(data) {
           });
         } catch (err) {
           console.warn('Failed to save colors to Supabase', err);
+        }
+      }
+
+      // Save Thresholds to Supabase
+      if (normalizedData.thresholds && Object.keys(normalizedData.thresholds).length > 0) {
+        try {
+          await supabaseRequest('/settings?on_conflict=id', {
+            method: 'POST',
+            body: [{ id: 'thresholds', value: JSON.stringify(normalizedData.thresholds) }]
+          });
+        } catch (err) {
+          console.warn('Failed to save thresholds to Supabase', err);
         }
       }
     } catch (error) {
@@ -904,10 +928,11 @@ async function renderTracking() {
   // Apply colors to summary total kcal
   const goals = normalizeGoalValues(data.goals || {});
   const colors = data.colors || {};
+  const thresholds = data.thresholds || {};
   const kcalGoal = goals.kcal || 0;
   if (kcalGoal > 0) {
     const progress = total / kcalGoal;
-    const color = buildGoalRows({kcal: total}, {kcal: kcalGoal}, colors)[0].color;
+    const color = buildGoalRows({kcal: total}, {kcal: kcalGoal}, colors, thresholds)[0].color;
     totalKcalEl.style.color = color;
   } else {
     totalKcalEl.style.color = '';
@@ -951,7 +976,8 @@ async function renderGoals() {
   };
   const goals = normalizeGoalValues(data.goals || {});
   const colors = data.colors || {};
-  const rows = buildGoalRows(actuals, goals, colors);
+  const thresholds = data.thresholds || {};
+  const rows = buildGoalRows(actuals, goals, colors, thresholds);
 
   goalsOverview.innerHTML = '';
   goalsForm.querySelectorAll('.goal-input').forEach((input) => {
@@ -965,6 +991,14 @@ async function renderGoals() {
     const key = input.dataset.colorKey;
     if (colors[key]) {
       input.value = colors[key];
+    }
+  });
+
+  // Fill threshold inputs
+  goalsForm.querySelectorAll('.threshold-input').forEach((input) => {
+    const key = input.dataset.thresholdKey;
+    if (thresholds[key]) {
+      input.value = Math.round(thresholds[key] * 100);
     }
   });
 
@@ -1264,6 +1298,7 @@ async function saveGoals(event) {
   const data = await loadData();
   const goals = {};
   const colors = {};
+  const thresholds = {};
 
   goalsForm.querySelectorAll('.goal-input').forEach((input) => {
     const key = input.dataset.goalKey;
@@ -1276,8 +1311,15 @@ async function saveGoals(event) {
     colors[key] = input.value;
   });
 
+  goalsForm.querySelectorAll('.threshold-input').forEach((input) => {
+    const key = input.dataset.thresholdKey;
+    const value = parseNumericValue(input.value);
+    thresholds[key] = value / 100;
+  });
+
   data.goals = normalizeGoalValues(goals);
   data.colors = colors;
+  data.thresholds = thresholds;
   await saveData(data);
   await renderGoals();
   await renderTracking();
