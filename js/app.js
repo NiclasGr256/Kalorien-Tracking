@@ -421,7 +421,7 @@ async function saveData(data) {
     return;
   }
 
-    try {
+      try {
     const db = await openDb();
     if (!db) return;
 
@@ -925,18 +925,8 @@ async function renderTracking() {
   totalMacrosEl.textContent = `${totalProtein.toLocaleString('de-DE')} g P · ${totalFat.toLocaleString('de-DE')} g F · ${totalCarbs.toLocaleString('de-DE')} g K · ${totalFiber.toLocaleString('de-DE')} g B`;
   entryCountEl.textContent = formatEntryCount(entries.length);
 
-  // Apply colors to summary total kcal
-  const goals = normalizeGoalValues(data.goals || {});
-  const colors = data.colors || {};
-  const thresholds = data.thresholds || {};
-  const kcalGoal = goals.kcal || 0;
-  if (kcalGoal > 0) {
-    const progress = total / kcalGoal;
-    const color = buildGoalRows({kcal: total}, {kcal: kcalGoal}, colors, thresholds)[0].color;
-    totalKcalEl.style.color = color;
-  } else {
-    totalKcalEl.style.color = '';
-  }
+  // Use original pink color for kcal total
+  totalKcalEl.style.color = 'var(--accent)';
 
   mealsList.innerHTML = '';
   const grouped = groupByMeal(entries);
