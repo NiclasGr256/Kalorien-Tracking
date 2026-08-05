@@ -459,6 +459,8 @@ const aiImageInput = document.getElementById('aiImageInput');
 const aiImagePreview = document.getElementById('aiImagePreview');
 const aiRemoveImageBtn = document.getElementById('aiRemoveImageBtn');
 const viewAiChat = document.getElementById('viewAiChat');
+const viewStatistics = document.getElementById('viewStatistics');
+const statsRange = document.getElementById('statsRange');
 const appEl = document.getElementById('app');
 const FOOD_SEARCH_MIN = 3;
 const SEARCH_DEBOUNCE = 300;
@@ -468,6 +470,7 @@ let searchAbortController = null;
 let selectedFoodBaseNutrition = null;
 let aiApiKey = localStorage.getItem('openai_api_key') || '';
 let pendingImageBase64 = null;
+let combinedChart = null;
 let chatHistory = [
   {
     role: 'system',
@@ -791,29 +794,33 @@ async function setView(view) {
   const isHistory = view === 'history';
   const isGoals = view === 'goals';
   const isAiChat = view === 'aiChat';
+  const isStatistics = view === 'statistics';
 
   viewTracking.classList.toggle('hidden', !isTracking);
   viewHistory.classList.toggle('hidden', !isHistory);
   viewCustomFoods.classList.toggle('hidden', !isCustomFoods);
   viewGoals.classList.toggle('hidden', !isGoals);
   viewAiChat.classList.toggle('hidden', !isAiChat);
+  viewStatistics.classList.toggle('hidden', !isStatistics);
+  
   headerTracking.classList.toggle('hidden', !isTracking);
-  headerHistory.classList.toggle('hidden', !isHistory && !isCustomFoods && !isGoals && !isAiChat);
+  headerHistory.classList.toggle('hidden', !isHistory && !isCustomFoods && !isGoals && !isAiChat && !isStatistics);
   addBtn.classList.toggle('hidden', !isTracking);
   appEl.classList.toggle('app--no-fab', !isTracking);
 
-  pageTitle.textContent = isHistory ? 'Übersicht' : isCustomFoods ? 'Gerichte' : isGoals ? 'Ziele' : isAiChat ? 'KI Chat' : 'Übersicht';
+  pageTitle.textContent = isHistory ? 'Übersicht' : isCustomFoods ? 'Gerichte' : isGoals ? 'Ziele' : isAiChat ? 'KI Chat' : isStatistics ? 'Statistiken' : 'Übersicht';
 
   navDrawer.querySelectorAll('.nav-item').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.view === view);
   });
 
-  location.hash = view === 'history' ? '#/history' : view === 'customFoods' ? '#/gerichte' : view === 'goals' ? '#/ziele' : view === 'aiChat' ? '#/ki-chat' : '#/';
+  location.hash = view === 'history' ? '#/history' : view === 'customFoods' ? '#/gerichte' : view === 'goals' ? '#/ziele' : view === 'aiChat' ? '#/ki-chat' : view === 'statistics' ? '#/statistiken' : '#/';
 
   if (isTracking) await renderTracking();
   else if (isCustomFoods) await renderCustomFoods();
   else if (isGoals) await renderGoals();
   else if (isAiChat) await renderAiChat();
+  else if (isStatistics) await renderStatistics();
   else await renderHistory();
 
   closeNav();
@@ -1266,6 +1273,104 @@ async function renderAiChat() {
   aiInput.focus();
 }
 
+async function renderStatistics() {
+  const data = await loadData();
+  const range = parseInt(statsRange.value) || 7;
+  const daysToShow = [];
+  
+  for (let i = range - 1; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    daysToShow.push(dateKey(d));
+  }
+
+  const kcalData = daysToShow.map(key => sumKcal(data.days[key] || []));
+  const proteinData = daysToShow.map(key => sumProtein(data.days[key] || []));
+  const labels = daysToShow.map(key => {
+    const d = parseDateKey(key);
+    if (range > 14) {
+      return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+    }
+    return d.toLocaleDateString('de-DE', { weekday: 'short' });
+  });
+
+  if (combinedChart) combinedChart.destroy();
+
+  combinedChart = new Chart(document.getElementById('combinedChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'kcal',
+          data: kcalData,
+          backgroundColor: 'rgba(236, 72, 153, 0.6)',
+          borderColor: '#EC4899',
+          borderWidth: 1,
+          borderRadius: 6,
+          yAxisID: 'yKcal',
+          order: 2
+        },
+                {
+          label: 'Protein (g)',
+          data: proteinData,
+          type: 'line',
+          borderColor: '#22C55E',
+          backgroundColor: '#22C55E',
+          borderWidth: 3,
+          pointRadius: 4,
+          tension: 0.3,
+          yAxisID: 'yProtein',
+          order: 1
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        mode: 'index',
+        intersect: false,
+      },
+      scales: {
+        yKcal: {
+          type: 'linear',
+          position: 'left',
+          beginAtZero: true,
+          title: { display: true, text: 'Kalorien (kcal)', color: '#EC4899' },
+          grid: { display: false }
+        },
+        yProtein: {
+          type: 'linear',
+          position: 'right',
+          beginAtZero: true,
+          title: { display: true, text: 'Protein (g)', color: '#22C55E' },
+          grid: { color: 'rgba(0,0,0,0.05)' }
+        }
+      },
+      plugins: {
+        legend: { position: 'bottom' }
+      }
+    }
+  });
+
+    // Summary
+  const avgKcal = Math.round(kcalData.reduce((a, b) => a + b, 0) / range);
+  const avgProtein = Math.round(proteinData.reduce((a, b) => a + b, 0) / range);
+  
+  const statsSummary = document.getElementById('statsSummary');
+  statsSummary.innerHTML = `
+    <div class="stats-summary-item">
+      <span>Ø Kalorien</span>
+      <strong>${avgKcal} kcal</strong>
+    </div>
+    <div class="stats-summary-item">
+      <span>Ø Protein</span>
+      <strong>${avgProtein} g</strong>
+    </div>
+  `;
+}
+
 function appendMessage(role, content) {
   const msgEl = document.createElement('div');
   msgEl.className = `message ${role}`;
@@ -1453,6 +1558,7 @@ function initFromHash() {
   else if (hash === '#/gerichte') setView('customFoods');
   else if (hash === '#/ziele') setView('goals');
   else if (hash === '#/ki-chat') setView('aiChat');
+  else if (hash === '#/statistiken') setView('statistics');
   else setView('tracking');
 }
 
@@ -1469,7 +1575,7 @@ resetDataBtn.addEventListener('click', () => {
 
 navDrawer.querySelectorAll('.nav-item').forEach((btn) => {
   btn.addEventListener('click', () => {
-    void setView(/** @type {'tracking' | 'history' | 'customFoods' | 'goals' | 'aiChat'} */ (btn.dataset.view));
+    void setView(/** @type {'tracking' | 'history' | 'customFoods' | 'goals' | 'aiChat' | 'statistics'} */ (btn.dataset.view));
   });
 });
 
@@ -1534,6 +1640,7 @@ aiSendBtn.addEventListener('click', handleAiMessage);
 aiAttachBtn.addEventListener('click', () => aiImageInput.click());
 aiImageInput.addEventListener('change', handleImageSelect);
 aiRemoveImageBtn.addEventListener('click', clearPendingImage);
+statsRange.addEventListener('change', () => renderStatistics());
 aiInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') handleAiMessage();
 });
