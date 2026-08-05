@@ -170,12 +170,23 @@ async function loadData() {
         supabaseRequest('/settings?select=id,value'),
       ]);
 
-      // Handle settings (API Key)
+            // Handle settings (API Key and Goals)
+      const goals = localData.goals || {};
       if (Array.isArray(settingsRows)) {
         const keySetting = settingsRows.find(s => s.id === 'openai_api_key');
         if (keySetting && keySetting.value) {
           aiApiKey = keySetting.value;
           localStorage.setItem('openai_api_key', aiApiKey);
+        }
+
+        const goalsSetting = settingsRows.find(s => s.id === 'goals');
+        if (goalsSetting && goalsSetting.value) {
+          try {
+            const remoteGoals = JSON.parse(goalsSetting.value);
+            Object.assign(goals, remoteGoals);
+          } catch (e) {
+            console.warn('Failed to parse remote goals', e);
+          }
         }
       }
 
@@ -234,7 +245,7 @@ async function loadData() {
         console.warn('Failed merging local data', e);
       }
 
-      return { days, customFoods, goals: localData.goals || {} };
+            return { days, customFoods, goals };
     } catch (error) {
       console.warn('Supabase load failed, falling back to localStorage', error);
       return localData;
@@ -341,6 +352,18 @@ async function saveData(data) {
               console.warn('Failed to upsert custom food', food.id, err, e2);
             }
           }
+      }
+      }
+
+      // Save Goals to Supabase
+      if (normalizedData.goals && Object.keys(normalizedData.goals).length > 0) {
+        try {
+          await supabaseRequest('/settings?on_conflict=id', {
+            method: 'POST',
+            body: [{ id: 'goals', value: JSON.stringify(normalizedData.goals) }]
+          });
+        } catch (err) {
+          console.warn('Failed to save goals to Supabase', err);
         }
       }
     } catch (error) {
