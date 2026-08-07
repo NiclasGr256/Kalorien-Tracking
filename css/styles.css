@@ -752,10 +752,11 @@ body.modal-open {
 .ai-container {
   display: flex;
   flex-direction: column;
-  height: calc(100dvh - 120px - var(--safe-top) - var(--safe-bottom));
+  height: calc(100dvh - 80px - var(--safe-top) - var(--safe-bottom));
   background: var(--surface);
   border-radius: var(--radius);
   overflow: hidden;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
 }
 
 .ai-messages {
@@ -764,24 +765,32 @@ body.modal-open {
   padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
+  background: var(--bg);
 }
 
 .message {
   max-width: 85%;
-  padding: 10px 14px;
-  border-radius: 14px;
+  padding: 12px 16px;
+  border-radius: 18px;
   font-size: 0.95rem;
-  line-height: 1.4;
+  line-height: 1.5;
+  position: relative;
+  word-wrap: break-word;
+}
+
+.message p {
+  margin: 0;
 }
 
 .message.system {
   align-self: center;
-  background: var(--surface-2);
+  background: transparent;
   color: var(--text-muted);
   text-align: center;
   font-size: 0.85rem;
   max-width: 90%;
+  padding: 0;
 }
 
 .message.user {
@@ -789,107 +798,113 @@ body.modal-open {
   background: var(--accent);
   color: white;
   border-bottom-right-radius: 4px;
+  box-shadow: 0 2px 4px rgba(236, 72, 153, 0.2);
 }
 
 .message.assistant {
   align-self: flex-start;
-  background: var(--surface-2);
+  background: var(--surface);
   color: var(--text);
   border-bottom-left-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.message-image {
+  max-width: 100%;
+  border-radius: 12px;
+  margin-bottom: 8px;
+  display: block;
+}
+
+
+.ai-input-wrapper {
+  background: var(--surface);
+  border-top: 1px solid var(--surface-2);
+  padding: 12px 16px calc(12px + var(--safe-bottom));
+}
+
+.ai-image-preview {
+  margin-bottom: 12px;
+}
+
+.preview-content {
+  position: relative;
+  display: inline-block;
+}
+
+.preview-content img {
+  height: 80px;
+  width: 80px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 2px solid var(--accent);
+}
+
+#aiRemoveImageBtn {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--over);
+  color: white;
+  border: 2px solid var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .ai-input-area {
   display: flex;
-  gap: 8px;
-  padding: 12px;
-  border-top: 1px solid var(--surface-2);
-  background: var(--surface);
-  align-items: center;
-}
-
-.ai-image-preview {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: var(--bg);
-  border-top: 1px solid var(--surface-2);
-}
-
-.ai-image-preview img {
-  height: 40px;
-  width: 40px;
-  object-fit: cover;
-  border-radius: 6px;
-}
-
-#aiRemoveImageBtn {
-  background: none;
-  border: none;
-  color: var(--over);
-  cursor: pointer;
-  font-size: 1.2rem;
+  gap: 12px;
+  align-items: flex-end;
 }
 
 .ai-input-area textarea {
   flex: 1;
   background: var(--bg);
   border: 1px solid var(--surface-2);
-  border-radius: 10px;
-  padding: 10px 14px;
+  border-radius: 20px;
+  padding: 10px 16px;
   font: inherit;
   outline: none;
   resize: none;
-  max-height: 120px;
-  min-height: 44px;
+  max-height: 150px;
+  min-height: 40px;
   line-height: 1.4;
+  transition: border-color 0.2s;
 }
 
-.message {
-  max-width: 85%;
-  padding: 10px 14px;
-  border-radius: 14px;
-  font-size: 0.95rem;
-  line-height: 1.4;
-  position: relative;
+.ai-input-area textarea:focus {
+  border-color: var(--accent);
 }
 
-.message.user {
-  align-self: flex-end;
-  background: var(--accent);
-  color: white;
-  border-bottom-right-radius: 4px;
-  cursor: pointer;
-}
-
-.message.user:hover::after {
-  content: '✎';
-  position: absolute;
-  left: -24px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--text-muted);
-  font-size: 0.8rem;
-}
-
-.ai-input-area button {
-  width: 44px;
-  height: 44px;
-  flex-shrink: 0;
-  font-size: 1rem;
+.send-btn {
+  background: var(--accent) !important;
+  color: white !important;
+  border-radius: 50% !important;
 }
 
 .api-key-hint {
-  font-style: italic;
+  background: var(--surface-2);
+  padding: 8px 12px;
+  border-radius: 12px;
   margin-top: 8px;
-  opacity: 0.8;
+  display: inline-block;
 }
 
 @media (max-width: 768px) {
   .ai-container {
-    height: calc(100dvh - 110px - var(--safe-top) - var(--safe-bottom));
+    height: calc(100dvh - 70px - var(--safe-top) - var(--safe-bottom));
+    margin: 0 -16px;
+    border-radius: 0;
   }
 }
+
 
 /* FAB */
 .fab {
@@ -1004,13 +1019,31 @@ body.modal-open {
   margin-bottom: 20px;
 }
 
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 16px;
-  position: relative;
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
 }
+
+.input-with-unit {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-with-unit input {
+  flex: 1;
+  padding-right: 44px !important;
+}
+
+.unit-label {
+  position: absolute;
+  right: 14px;
+  color: var(--text-muted);
+  font-weight: 500;
+  pointer-events: none;
+}
+
 
 .field span {
   font-size: 0.8rem;
@@ -1089,9 +1122,69 @@ body.modal-open {
   margin-top: 4px;
 }
 
+/* Form Layouts */
+.custom-food-form {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.custom-food-form .field-row {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+.custom-food-form .field-row .field {
+  flex: 1;
+  min-width: 0;
+}
+
+.custom-food-form .btn-primary {
+  margin-top: 8px;
+  width: 100%;
+}
+
+.nutrient-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 4px;
+  padding-top: 16px;
+  border-top: 1px solid var(--surface-2);
+}
+
 .field {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
 }
+
+.field input,
+.field select {
+  background: var(--surface-2);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 12px 14px;
+  color: #1f1f20;
+  font-size: 1rem;
+  font-family: inherit;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  min-height: 48px;
+  width: 100%;
+}
+
+
+
 
 .modal-actions {
   display: flex;

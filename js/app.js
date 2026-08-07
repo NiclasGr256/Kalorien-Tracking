@@ -13,6 +13,7 @@ function upsertCustomFood(data, foodInput, existingId = null) {
     id: existingId || crypto.randomUUID(),
     name: foodInput.name?.trim() || 'Unbenannt',
     weightGrams: Number(foodInput.weightGrams) > 0 ? Number(foodInput.weightGrams) : 100,
+    unit: foodInput.unit || 'g',
     kcal: Number(foodInput.kcal) || 0,
     protein: Number(foodInput.protein) || 0,
     carbs: Number(foodInput.carbs) || 0,
@@ -31,6 +32,7 @@ function upsertCustomFood(data, foodInput, existingId = null) {
   normalized.customFoods.push(payload);
   return normalized;
 }
+
 
 
 
@@ -153,22 +155,23 @@ async function loadData() {
   if (isSupabaseConfigured()) {
     try {
       const [entriesRows, foodsRows, settingsRows] = await Promise.all([
-        (async () => {
+                (async () => {
           try {
+            return await supabaseRequest('/entries?select=id,date,meal,name,kcal,protein,carbs,fat,fiber,weight_grams,unit,created_at&order=created_at.asc');
+          } catch (error) {
+            console.warn('Falling back to entries without unit column', error);
             return await supabaseRequest('/entries?select=id,date,meal,name,kcal,protein,carbs,fat,fiber,weight_grams,created_at&order=created_at.asc');
-          } catch (error) {
-            console.warn('Falling back to entries without fiber column', error);
-            return await supabaseRequest('/entries?select=id,date,meal,name,kcal,protein,carbs,fat,weight_grams,created_at&order=created_at.asc');
           }
         })(),
         (async () => {
           try {
-            return await supabaseRequest('/custom_foods?select=id,name,weight_grams,kcal,protein,carbs,fat,fiber');
+            return await supabaseRequest('/custom_foods?select=id,name,weight_grams,unit,kcal,protein,carbs,fat,fiber');
           } catch (error) {
-            console.warn('Falling back to custom foods without fiber column', error);
-            return await supabaseRequest('/custom_foods?select=id,name,weight_grams,kcal,protein,carbs,fat');
+            console.warn('Falling back to custom foods without unit column', error);
+            return await supabaseRequest('/custom_foods?select=id,name,weight_grams,kcal,protein,carbs,fat,fiber');
           }
         })(),
+
         supabaseRequest('/settings?select=id,value'),
       ]);
 
@@ -215,7 +218,7 @@ async function loadData() {
         }
       }
 
-      const days = {};
+            const days = {};
       const entryRows = Array.isArray(entriesRows) ? entriesRows : [];
       for (const row of entryRows) {
         const date = row.date;
@@ -229,6 +232,7 @@ async function loadData() {
           fat: Number(row.fat) || 0,
           fiber: Number(row.fiber) || 0,
           weightGrams: Number(row.weight_grams) || 0,
+          unit: row.unit || 'g',
           meal: row.meal || 'snack',
           createdAt: row.created_at ? Date.parse(row.created_at) : Date.now(),
         });
@@ -239,6 +243,7 @@ async function loadData() {
             id: row.id,
             name: row.name,
             weightGrams: Number(row.weight_grams) || 100,
+            unit: row.unit || 'g',
             kcal: Number(row.kcal) || 0,
             protein: Number(row.protein) || 0,
             carbs: Number(row.carbs) || 0,
@@ -246,6 +251,7 @@ async function loadData() {
             fiber: Number(row.fiber) || 0,
           }))
         : [];
+
 
       // Merge with localStorage data so recent local-only entries remain visible
       try {
@@ -320,7 +326,7 @@ async function saveData(data) {
 
   if (isSupabaseConfigured()) {
     try {
-      const flatEntries = Object.entries(normalizedData.days).flatMap(([date, entries]) =>
+            const flatEntries = Object.entries(normalizedData.days).flatMap(([date, entries]) =>
         (entries || []).map((entry) => ({
           id: entry.id,
           date,
@@ -332,6 +338,7 @@ async function saveData(data) {
           fat: Number(entry.fat) || 0,
           fiber: Number(entry.fiber) || 0,
           weight_grams: Number(entry.weightGrams) || 0,
+          unit: entry.unit || 'g',
           created_at: entry.createdAt ? new Date(entry.createdAt).toISOString() : new Date().toISOString(),
         }))
       );
@@ -355,12 +362,14 @@ async function saveData(data) {
         id: food.id,
         name: food.name,
         weight_grams: Number(food.weightGrams) || 100,
+        unit: food.unit || 'g',
         kcal: Number(food.kcal) || 0,
         protein: Number(food.protein) || 0,
         carbs: Number(food.carbs) || 0,
         fat: Number(food.fat) || 0,
         fiber: Number(food.fiber) || 0,
       }));
+
 
       if (customFoodsPayload.length) {
         for (const food of customFoodsPayload) {
@@ -482,7 +491,9 @@ const goalsOverview = document.getElementById('goalsOverview');
 const customFoodForm = document.getElementById('customFoodForm');
 const customFoodName = document.getElementById('customFoodName');
 const customFoodWeight = document.getElementById('customFoodWeight');
+const customFoodUnit = document.getElementById('customFoodUnit');
 const customFoodKcal = document.getElementById('customFoodKcal');
+
 const customFoodProtein = document.getElementById('customFoodProtein');
 const customFoodCarbs = document.getElementById('customFoodCarbs');
 const customFoodFat = document.getElementById('customFoodFat');
@@ -490,7 +501,9 @@ const customFoodFiber = document.getElementById('customFoodFiber');
 const customFoodList = document.getElementById('customFoodList');
 const foodName = document.getElementById('foodName');
 const foodWeight = document.getElementById('foodWeight');
+const foodUnitLabel = document.getElementById('foodUnitLabel');
 const foodKcal = document.getElementById('foodKcal');
+
 const foodProtein = document.getElementById('foodProtein');
 const foodCarbs = document.getElementById('foodCarbs');
 const foodFat = document.getElementById('foodFat');
@@ -585,12 +598,15 @@ async function searchFood(query) {
       carbs: Number(food.carbs) || 0,
       fat: Number(food.fat) || 0,
       fiber: Number(food.fiber) || 0,
-      portionLabel: `${food.weightGrams || 100} g`,
+      weightGrams: food.weightGrams || 100,
+      unit: food.unit || 'g',
+      portionLabel: `${food.weightGrams || 100} ${food.unit || 'g'}`,
       isCustomFood: true,
     }));
 
   return customMatches.slice(0, SEARCH_PAGE_SIZE);
 }
+
 
 function applySuggestionSelection(result) {
   fillFoodFromSuggestion(result);
@@ -682,8 +698,8 @@ function parseNumericValue(value) {
 function applySelectedFoodNutrition() {
   if (!selectedFoodBaseNutrition) return;
 
-  const grams = Math.max(parseNumericValue(foodWeight.value) || 100, 1);
-  const factor = grams / 100;
+  const amount = Math.max(parseNumericValue(foodWeight.value) || selectedFoodBaseNutrition.baseAmount || 100, 0.1);
+  const factor = amount / (selectedFoodBaseNutrition.baseAmount || 100);
 
   foodKcal.value = String(Math.max(Math.round(selectedFoodBaseNutrition.kcal * factor), 0));
   foodProtein.value = selectedFoodBaseNutrition.protein != null ? String((selectedFoodBaseNutrition.protein * factor).toFixed(1)) : '';
@@ -700,11 +716,15 @@ function fillFoodFromSuggestion(result) {
     carbs: result.carbs != null ? result.carbs : 0,
     fat: result.fat != null ? result.fat : 0,
     fiber: result.fiber != null ? result.fiber : 0,
+    baseAmount: result.weightGrams || 100,
+    unit: result.unit || 'g'
   };
-  foodWeight.value = '100';
+  foodWeight.value = String(selectedFoodBaseNutrition.baseAmount);
+  foodUnitLabel.textContent = selectedFoodBaseNutrition.unit;
   applySelectedFoodNutrition();
   clearSearchResults();
 }
+
 
 function handleFoodNameInput() {
   const query = foodName.value.trim();
@@ -940,7 +960,7 @@ async function renderTracking() {
 
     const header = document.createElement('div');
     header.className = 'meal-header';
-    header.innerHTML = `<h3>${MEAL_LABELS[meal]}</h3><span class="meal-total">${sumKcal(items)} kcal · ${sumProtein(items)} g</span>`;
+    header.innerHTML = `<h3>${MEAL_LABELS[meal]}</h3><span class="meal-total">${sumKcal(items).toLocaleString('de-DE')} kcal · ${sumProtein(items).toLocaleString('de-DE')} g P</span>`;
     group.appendChild(header);
 
     for (const entry of items) {
@@ -952,6 +972,7 @@ async function renderTracking() {
 
   emptyState.classList.toggle('hidden', entries.length > 0);
 }
+
 
 async function renderGoals() {
   const data = await loadData();
@@ -1031,10 +1052,11 @@ async function renderCustomFoods() {
   for (const food of foods) {
     const card = document.createElement('div');
     card.className = 'custom-food-card';
+    const unit = food.unit || 'g';
     card.innerHTML = `
       <div>
         <h3>${escapeHtml(food.name)}</h3>
-        <p>${food.weightGrams || 100} g · ${Number(food.kcal) || 0} kcal</p>
+        <p>${food.weightGrams || 100} ${unit} · ${Number(food.kcal) || 0} kcal</p>
         <p>P ${Number(food.protein) || 0} g · F ${Number(food.fat) || 0} g · K ${Number(food.carbs) || 0} g · B ${Number(food.fiber) || 0} g</p>
       </div>
       <div class="custom-food-actions">
@@ -1048,6 +1070,7 @@ async function renderCustomFoods() {
     customFoodList.appendChild(card);
   }
 }
+
 
 async function renderHistory() {
   const data = await loadData();
@@ -1120,11 +1143,12 @@ function groupByMeal(entries) {
 function createEntryEl(entry) {
   const el = document.createElement('div');
   el.className = 'entry';
+  const unit = entry.unit || 'g';
   el.innerHTML = `
     <div class="entry-info">
       <div class="entry-main">
         <div class="entry-name">${escapeHtml(entry.name)}</div>
-        <div class="entry-subtext">${entry.kcal} kcal · P ${getEntryProtein(entry)} g · F ${getEntryFat(entry)} g · K ${getEntryCarbs(entry)} g · B ${getEntryFiber(entry)} g</div>
+        <div class="entry-subtext">${entry.weightGrams || 0} ${unit} · ${entry.kcal} kcal · P ${getEntryProtein(entry)} g · F ${getEntryFat(entry)} g · K ${getEntryCarbs(entry)} g · B ${getEntryFiber(entry)} g</div>
       </div>
     </div>
     <span class="entry-kcal">${entry.kcal}</span>
@@ -1139,6 +1163,7 @@ function createEntryEl(entry) {
 
   return el;
 }
+
 
 function escapeHtml(str) {
   const div = document.createElement('div');
@@ -1184,7 +1209,9 @@ function openAddModal() {
   renderMealPicker(guessMealByTime());
   foodName.value = '';
   foodWeight.value = '';
+  foodUnitLabel.textContent = 'g';
   foodKcal.value = '';
+
   foodProtein.value = '';
   foodCarbs.value = '';
   foodFat.value = '';
@@ -1206,6 +1233,7 @@ function openEditModal(entry) {
   renderMealPicker(entry.meal);
   foodName.value = entry.name;
   foodWeight.value = String(entry.weightGrams ?? '');
+  foodUnitLabel.textContent = entry.unit || 'g';
   foodKcal.value = String(entry.kcal);
   foodProtein.value = String(entry.protein ?? 0);
   foodCarbs.value = String(entry.carbs ?? 0);
@@ -1231,6 +1259,7 @@ async function saveEntry(e) {
   const fat = parseNumericValue(foodFat.value);
   const fiber = parseNumericValue(foodFiber.value);
   const weightGrams = Math.max(parseNumericValue(foodWeight.value), 0);
+  const unit = foodUnitLabel.textContent;
   const selectedMeal = normalizeMealValue(mealSelect.value);
   if (!name || !kcal || kcal < 1 || protein < 0 || carbs < 0 || fat < 0 || fiber < 0) return;
 
@@ -1241,7 +1270,7 @@ async function saveEntry(e) {
   if (editingEntryId) {
     const idx = data.days[key].findIndex((x) => x.id === editingEntryId);
     if (idx !== -1) {
-      data.days[key][idx] = { ...data.days[key][idx], name, kcal, protein, carbs, fat, fiber, weightGrams, meal: selectedMeal };
+      data.days[key][idx] = { ...data.days[key][idx], name, kcal, protein, carbs, fat, fiber, weightGrams, unit, meal: selectedMeal };
     }
   } else {
     data.days[key].push({
@@ -1253,6 +1282,7 @@ async function saveEntry(e) {
       fat,
       fiber,
       weightGrams,
+      unit,
       meal: selectedMeal,
       createdAt: Date.now(),
     });
@@ -1262,6 +1292,7 @@ async function saveEntry(e) {
   entryModal.close();
   await renderTracking();
 }
+
 
 async function deleteEntry(id) {
   const confirmed = await showConfirm('Eintrag löschen', 'Diesen Eintrag wirklich löschen?');
@@ -1319,22 +1350,24 @@ async function saveCustomFood(event) {
   event.preventDefault();
   const name = customFoodName.value.trim();
   const weightInput = Math.max(parseNumericValue(customFoodWeight.value), 0) || 100;
+  const unit = customFoodUnit.value;
   
-  // Normalization factor to 100g
-  const factor = 100 / weightInput;
-
-  const kcal = parseNumericValue(customFoodKcal.value) * factor;
-  const protein = parseNumericValue(customFoodProtein.value) * factor;
-  const carbs = parseNumericValue(customFoodCarbs.value) * factor;
-  const fat = parseNumericValue(customFoodFat.value) * factor;
-  const fiber = parseNumericValue(customFoodFiber.value) * factor;
+  // Normalization factor (to 100 for grams/ml, or per 1 unit for Stk)
+  // But wait: if it's "per Stück", let's just store it as "1 Stk".
+  // To keep it simple: we store the kcal for the given "weightInput" and "unit".
+  
+  const kcal = parseNumericValue(customFoodKcal.value);
+  const protein = parseNumericValue(customFoodProtein.value);
+  const carbs = parseNumericValue(customFoodCarbs.value);
+  const fat = parseNumericValue(customFoodFat.value);
+  const fiber = parseNumericValue(customFoodFiber.value);
 
   if (!name || kcal < 0 || protein < 0 || carbs < 0 || fat < 0 || fiber < 0) return;
 
   const data = await loadData();
   const updatedData = upsertCustomFood(
     data,
-    { name, weightGrams: 100, kcal, protein, carbs, fat, fiber },
+    { name, weightGrams: weightInput, unit, kcal, protein, carbs, fat, fiber },
     editingCustomFoodId,
   );
 
@@ -1346,6 +1379,7 @@ async function saveCustomFood(event) {
   if (submitButton) submitButton.textContent = 'Gericht speichern';
   await renderCustomFoods();
 }
+
 
 async function deleteCustomFood(id) {
   const confirmed = await showConfirm('Gericht löschen', 'Dieses Gericht wirklich löschen?');
@@ -1378,7 +1412,9 @@ function openEditCustomFoodModal(food) {
   editingCustomFoodId = food.id;
   customFoodName.value = food.name || '';
   customFoodWeight.value = String(food.weightGrams || 100);
+  customFoodUnit.value = food.unit || 'g';
   customFoodKcal.value = String(food.kcal || 0);
+
   customFoodProtein.value = String(food.protein || 0);
   customFoodCarbs.value = String(food.carbs || 0);
   customFoodFat.value = String(food.fat || 0);
@@ -1496,23 +1532,39 @@ function appendMessage(role, content) {
   const msgEl = document.createElement('div');
   msgEl.className = `message ${role}`;
   
-  // Handling for complex content (text + images)
   let textContent = '';
+  let imageUrl = null;
+
   if (Array.isArray(content)) {
     const textPart = content.find(c => c.type === 'text');
-    textContent = textPart ? textPart.text : 'Bild analysiert';
+    const imagePart = content.find(c => c.type === 'image_url');
+    textContent = textPart ? textPart.text : '';
+    imageUrl = imagePart ? imagePart.image_url.url : null;
   } else {
     textContent = content;
   }
 
-  msgEl.innerHTML = `<p>${escapeHtml(textContent).replace(/\n/g, '<br>')}</p>`;
-  
+  if (imageUrl) {
+    const img = document.createElement('img');
+    img.src = imageUrl;
+    img.className = 'message-image';
+    msgEl.appendChild(img);
+  }
+
+  if (textContent) {
+    const p = document.createElement('p');
+    p.innerHTML = escapeHtml(textContent).replace(/\n/g, '<br>');
+    msgEl.appendChild(p);
+  }
+
   if (role === 'user') {
     msgEl.addEventListener('click', () => {
-      aiInput.value = textContent;
-      aiInput.focus();
-      aiInput.style.height = 'auto';
-      aiInput.style.height = aiInput.scrollHeight + 'px';
+      if (textContent) {
+        aiInput.value = textContent;
+        aiInput.focus();
+        aiInput.style.height = 'auto';
+        aiInput.style.height = aiInput.scrollHeight + 'px';
+      }
     });
   }
 
@@ -1564,12 +1616,12 @@ async function handleAiMessage() {
     });
   }
 
-  appendMessage('user', text || 'Bild wird analysiert...');
+  appendMessage('user', userMessageContent);
   aiInput.value = '';
-  const currentPendingImage = pendingImageBase64;
   clearPendingImage();
 
   chatHistory.push({ role: 'user', content: userMessageContent });
+
 
   try {
     const data = await callAi(chatHistory, aiApiKey);
