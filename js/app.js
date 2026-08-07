@@ -253,31 +253,13 @@ async function loadData() {
         : [];
 
 
-      // Merge with localStorage data so recent local-only entries remain visible
-      try {
-        const local = loadFromLocalStorage();
-        // merge days
-        for (const [dateKey, localEntries] of Object.entries(local.days || {})) {
-          if (!days[dateKey]) days[dateKey] = [];
-          const existingIds = new Set((days[dateKey] || []).map((e) => e.id));
-          for (const le of localEntries) {
-            if (!existingIds.has(le.id)) {
-              days[dateKey].push(le);
-            }
-          }
-        }
+            // When Supabase is active, it's the source of truth.
+      // We overwrite local data with remote data to avoid "zombie" entries.
+      saveToLocalStorage({ days, customFoods, goals, colors, thresholds });
 
-        // merge custom foods
-        const existingFoodIds = new Set((customFoods || []).map((f) => f.id));
-        for (const lf of (local.customFoods || [])) {
-          if (!existingFoodIds.has(lf.id)) customFoods.push(lf);
-        }
-      } catch (e) {
-        console.warn('Failed merging local data', e);
-      }
-
-            return { days, customFoods, goals, colors, thresholds };
+      return { days, customFoods, goals, colors, thresholds };
     } catch (error) {
+
       console.warn('Supabase load failed, falling back to localStorage', error);
       return localData;
     }
