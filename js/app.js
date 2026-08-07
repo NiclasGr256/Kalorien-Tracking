@@ -155,7 +155,7 @@ async function loadData() {
   if (isSupabaseConfigured()) {
     try {
       const [entriesRows, foodsRows, settingsRows] = await Promise.all([
-                (async () => {
+        (async () => {
           try {
             return await supabaseRequest('/entries?select=id,date,meal,name,kcal,protein,carbs,fat,fiber,weight_grams,unit,created_at&order=created_at.asc');
           } catch (error) {
@@ -171,7 +171,6 @@ async function loadData() {
             return await supabaseRequest('/custom_foods?select=id,name,weight_grams,kcal,protein,carbs,fat,fiber');
           }
         })(),
-
         supabaseRequest('/settings?select=id,value'),
       ]);
 
@@ -185,9 +184,14 @@ async function loadData() {
         if (keySetting && keySetting.value) {
           aiApiKey = keySetting.value;
           localStorage.setItem('openai_api_key', aiApiKey);
+          console.debug('API Key loaded from Supabase');
+        } else {
+          // If not in Supabase, check local storage
+          aiApiKey = localStorage.getItem('openai_api_key') || '';
         }
 
         const goalsSetting = settingsRows.find(s => s.id === 'goals');
+
         if (goalsSetting && goalsSetting.value) {
           try {
             const remoteGoals = JSON.parse(goalsSetting.value);
@@ -1408,9 +1412,18 @@ function openEditCustomFoodModal(food) {
 }
 
 async function renderAiChat() {
-  // Chat view doesn't need specific data loading here as it's handled by messages
+  const data = await loadData(); // Ensure data (and API Key) is loaded
+  
+  const keyHint = document.querySelector('.api-key-hint');
+  if (aiApiKey && keyHint) {
+    keyHint.classList.add('hidden');
+  } else if (!aiApiKey && keyHint) {
+    keyHint.classList.remove('hidden');
+  }
+  
   aiInput.focus();
 }
+
 
 async function renderStatistics() {
   const data = await loadData();
