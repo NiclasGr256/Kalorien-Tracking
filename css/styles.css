@@ -752,11 +752,9 @@ body.modal-open {
 .ai-container {
   display: flex;
   flex-direction: column;
-  height: calc(100dvh - 80px - var(--safe-top) - var(--safe-bottom));
-  background: var(--surface);
-  border-radius: var(--radius);
-  overflow: hidden;
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  height: calc(100dvh - 70px - var(--safe-top) - var(--safe-bottom));
+  background: var(--bg);
+  position: relative;
 }
 
 .ai-messages {
@@ -765,32 +763,18 @@ body.modal-open {
   padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  background: var(--bg);
+  gap: 12px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .message {
-  max-width: 85%;
-  padding: 12px 16px;
+  max-width: 80%;
+  padding: 10px 14px;
   border-radius: 18px;
   font-size: 0.95rem;
-  line-height: 1.5;
+  line-height: 1.4;
   position: relative;
   word-wrap: break-word;
-}
-
-.message p {
-  margin: 0;
-}
-
-.message.system {
-  align-self: center;
-  background: transparent;
-  color: var(--text-muted);
-  text-align: center;
-  font-size: 0.85rem;
-  max-width: 90%;
-  padding: 0;
 }
 
 .message.user {
@@ -798,7 +782,6 @@ body.modal-open {
   background: var(--accent);
   color: white;
   border-bottom-right-radius: 4px;
-  box-shadow: 0 2px 4px rgba(236, 72, 153, 0.2);
 }
 
 .message.assistant {
@@ -806,104 +789,84 @@ body.modal-open {
   background: var(--surface);
   color: var(--text);
   border-bottom-left-radius: 4px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0,0,0,0.05);
 }
-
-.message-image {
-  max-width: 100%;
-  border-radius: 12px;
-  margin-bottom: 8px;
-  display: block;
-}
-
 
 .ai-input-wrapper {
   background: var(--surface);
   border-top: 1px solid var(--surface-2);
-  padding: 12px 16px calc(12px + var(--safe-bottom));
-}
-
-.ai-image-preview {
-  margin-bottom: 12px;
-}
-
-.preview-content {
-  position: relative;
-  display: inline-block;
-}
-
-.preview-content img {
-  height: 80px;
-  width: 80px;
-  object-fit: cover;
-  border-radius: 12px;
-  border: 2px solid var(--accent);
-}
-
-#aiRemoveImageBtn {
-  position: absolute;
-  top: -8px;
-  right: -8px;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--over);
-  color: white;
-  border: 2px solid var(--surface);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.8rem;
-  cursor: pointer;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  padding: 10px 12px calc(10px + var(--safe-bottom));
+  z-index: 10;
 }
 
 .ai-input-area {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   align-items: flex-end;
+  background: var(--bg);
+  padding: 6px 6px 6px 12px;
+  border-radius: 24px;
+  border: 1px solid var(--surface-2);
 }
 
 .ai-input-area textarea {
   flex: 1;
-  background: var(--bg);
-  border: 1px solid var(--surface-2);
-  border-radius: 20px;
-  padding: 10px 16px;
-  font: inherit;
+  background: transparent;
+  border: none;
+  padding: 8px 0;
+  font-size: 16px; /* Prevent iOS zoom on focus */
   outline: none;
   resize: none;
-  max-height: 150px;
-  min-height: 40px;
-  line-height: 1.4;
-  transition: border-color 0.2s;
+  max-height: 120px;
+  min-height: 24px;
+  line-height: 1.3;
+  color: var(--text);
 }
 
-.ai-input-area textarea:focus {
-  border-color: var(--accent);
+.icon-btn.send-btn {
+  background: var(--accent);
+  color: white;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.1s;
+  flex-shrink: 0;
+  margin-bottom: 2px;
 }
 
-.send-btn {
-  background: var(--accent) !important;
-  color: white !important;
-  border-radius: 50% !important;
+.icon-btn.send-btn svg {
+  width: 18px;
+  height: 18px;
+  margin-left: 2px;
 }
 
-.api-key-hint {
-  background: var(--surface-2);
-  padding: 8px 12px;
-  border-radius: 12px;
-  margin-top: 8px;
-  display: inline-block;
+.ai-image-preview {
+  margin-bottom: 8px;
+  padding-left: 4px;
+}
+
+.preview-content img {
+  height: 60px;
+  width: 60px;
+  border-radius: 10px;
+  border: 1px solid var(--surface-2);
 }
 
 @media (max-width: 768px) {
   .ai-container {
-    height: calc(100dvh - 70px - var(--safe-top) - var(--safe-bottom));
-    margin: 0 -16px;
-    border-radius: 0;
+    height: calc(100dvh - 64px - var(--safe-top));
+    margin: 0 -16px -16px -16px; /* Pull to edges and bottom */
+  }
+  
+  .ai-messages {
+    padding: 12px;
   }
 }
+
 
 
 /* FAB */
