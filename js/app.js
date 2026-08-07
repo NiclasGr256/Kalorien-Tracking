@@ -1572,26 +1572,21 @@ async function handleAiMessage() {
   if (!text && !pendingImageBase64) return;
 
   if (!aiApiKey) {
+    // ... (API Key handling remains same)
     if (text.startsWith('sk-')) {
       aiApiKey = text;
       localStorage.setItem('openai_api_key', aiApiKey);
-      
-      // Save to Supabase for cross-device sync
       if (isSupabaseConfigured()) {
         try {
           await supabaseRequest('/settings?on_conflict=id', {
             method: 'POST',
             body: [{ id: 'openai_api_key', value: aiApiKey }]
           });
-          appendMessage('system', 'API-Key sicher in der Cloud gespeichert und auf allen Geräten verfügbar!');
+          appendMessage('system', 'API-Key sicher in der Cloud gespeichert!');
         } catch (e) {
-          console.warn('Failed to save key to Supabase', e);
-          appendMessage('system', 'API-Key lokal gespeichert (Cloud-Sync fehlgeschlagen).');
+          appendMessage('system', 'API-Key lokal gespeichert.');
         }
-      } else {
-        appendMessage('system', 'API-Key lokal gespeichert!');
       }
-
       aiInput.value = '';
       return;
     } else {
@@ -1617,36 +1612,49 @@ async function handleAiMessage() {
 
   chatHistory.push({ role: 'user', content: userMessageContent });
 
-
   try {
-    const data = await callAi(chatHistory, aiApiKey);
-    const choice = data.choices[0];
-    const message = choice.message;
+    let keepProcessing = true;
+    let maxRounds = 5; // Safety limit
 
-        if (message.tool_calls) {
-      chatHistory.push(message); // Push assistant message first
-      for (const toolCall of message.tool_calls) {
-        const result = await executeTool(toolCall);
-        chatHistory.push({
-          tool_call_id: toolCall.id,
-          role: 'tool',
-          name: toolCall.function.name,
-          content: JSON.stringify(result)
-        });
-      }
-      // Call AI again with tool results
-      const secondData = await callAi(chatHistory, aiApiKey);
-      const secondMessage = secondData.choices[0].message;
-      appendMessage('assistant', secondMessage.content);
-      chatHistory.push(secondMessage);
-    } else {
-      appendMessage('assistant', message.content);
+    while (keepProcessing && maxRounds > 0) {
+      maxRounds--;
+      const data = await callAi(chatHistory, aiApiKey);
+      const message = data.choices[0].message;
+      
+      // Always push the assistant's message (even if it's just tool_calls)
       chatHistory.push(message);
+
+      if (message.tool_calls) {
+        for (const toolCall of message.tool_calls) {
+          const result = await executeTool(toolCall);
+          chatHistory.push({
+            tool_call_id: toolCall.id,
+            role: 'tool',
+            name: toolCall.function.name,
+            content: JSON.stringify(result)
+          });
+        }
+        // After processing tools, the loop will call AI again with the results
+      } else {
+        // No tool calls? We are done, show the message to the user
+        if (message.content) {
+          appendMessage('assistant', message.content);
+        }
+        keepProcessing = false;
+      }
     }
+    
+    if (maxRounds === 0) {
+      appendMessage('system', 'Hinweis: Die KI hat zu viele Schritte benötigt.');
+    }
+
   } catch (error) {
+    console.error('AI Error:', error);
     appendMessage('system', `Fehler: ${error.message}`);
+    // Optional: remove last user message if it failed to keep history clean
   }
 }
+
 
 function clearPendingImage() {
   pendingImageBase64 = null;
