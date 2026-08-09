@@ -1030,8 +1030,10 @@ async function renderGoals() {
 
 async function renderCustomFoods() {
   const data = await loadData();
-  const foods = Array.isArray(data.customFoods) ? data.customFoods : [];
+  const foods = (Array.isArray(data.customFoods) ? data.customFoods : [])
+    .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'de', { sensitivity: 'base' }));
   customFoodList.innerHTML = '';
+
 
   if (!foods.length) {
     const empty = document.createElement('p');
