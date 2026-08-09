@@ -12,7 +12,7 @@
   <title>Kalorien Tracker</title>
   <link rel="manifest" href="manifest.webmanifest?v=20260803-2">
     <link rel="apple-touch-icon" href="icons/icon-192.png?v=20260803-2">
-  <link rel="stylesheet" href="css/styles.css?v=20260804-1">
+  <link rel="stylesheet" href="css/styles.css?v=20260804-3">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -224,12 +224,18 @@
           </div>
         </main>
 
-        <!-- AI Chat -->
+                <!-- AI Chat -->
     <main class="main view hidden" id="viewAiChat">
       <div class="ai-container">
+        <div class="ai-chat-header">
+          <button type="button" class="clear-chat-btn" id="clearChatBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+            Chat leeren
+          </button>
+        </div>
         <div class="ai-messages" id="aiMessages">
           <div class="message system">
-            <p>Hallo! Ich bin dein KI-Assistent. Ich kann Einträge für dich anlegen, Ziele ändern oder deine Daten analysieren. </p>
+            <p>Hallo! Ich bin dein KI-Assistent. Ich kann Einträge für dich anlegen, Ziele ändern oder deine Daten analysieren.</p>
             <p class="api-key-hint">Um zu starten, hinterlege bitte einen OpenAI API-Key in den Einstellungen oder tippe ihn hier ein.</p>
           </div>
         </div>
@@ -348,6 +354,6 @@
       anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVpcHR0YmRoYXF5c3BraHFvcXVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ3NDM0NjUsImV4cCI6MjEwMDMxOTQ2NX0.UjFQXssAH3vbHg-nYRcS5h-36JZw-3cTmQ-2_f6xQ3c'
     };
   </script>
-  <script src="js/app.js?v=20260804-5" type="module"></script>
+  <script src="js/app.js?v=20260804-7" type="module"></script>
 </body>
 </html>

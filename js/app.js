@@ -522,11 +522,13 @@ let selectedFoodBaseNutrition = null;
 let aiApiKey = localStorage.getItem('openai_api_key') || '';
 let pendingImageBase64 = null;
 let combinedChart = null;
-let chatHistory = [
-  {
+let chatHistory = [];
+
+function getSystemPrompt() {
+  return {
     role: 'system',
     content: `Du bist ein intelligenter Ernährungs-Coach für einen Kalorien-Tracker.
-Aktuelles Datum: ${new Date().toLocaleDateString('de-DE')}.
+Aktuelles Datum: ${new Date().toLocaleDateString('de-DE')} (${new Date().toLocaleDateString('de-DE', { weekday: 'long' })}).
 
 DEINE REGELN:
 1. KONSISTENZ PRÜFEN: Bevor du einen neuen Eintrag anlegst (add_entry), nutze IMMER zuerst 'get_data', um zu sehen, ob der Nutzer dieses Lebensmittel schon einmal gegessen hat oder ob es in den 'customFoods' existiert. Nutze bevorzugt diese bekannten Nährwerte.
@@ -536,8 +538,12 @@ DEINE REGELN:
 5. BEARBEITEN: Du kannst Einträge mit 'update_entry' ändern, wenn der Nutzer z.B. sagt "Ich habe doch 2 Äpfel gegessen" oder "Ändere das Frühstück von heute auf 500 kcal".
 
 Nutze die bereitgestellten Tools für alle Aktionen. Antworte immer freundlich auf Deutsch.`
-  }
-];
+  };
+}
+
+function initChatHistory() {
+  chatHistory = [getSystemPrompt()];
+}
 
 function startOfDay(d) {
   const copy = new Date(d);
@@ -1414,6 +1420,11 @@ function openEditCustomFoodModal(food) {
 async function renderAiChat() {
   const data = await loadData(); // Ensure data (and API Key) is loaded
   
+  // Initialize chat history if empty
+  if (chatHistory.length === 0) {
+    initChatHistory();
+  }
+  
   const keyHint = document.querySelector('.api-key-hint');
   if (aiApiKey && keyHint) {
     keyHint.classList.add('hidden');
@@ -1422,6 +1433,56 @@ async function renderAiChat() {
   }
   
   aiInput.focus();
+}
+
+function clearChatHistory() {
+  // Clear chat history
+  initChatHistory();
+  
+  // Clear UI messages
+  aiMessages.innerHTML = `
+    <div class="message system">
+      <p>Hallo! Ich bin dein KI-Assistent. Ich kann Einträge für dich anlegen, Ziele ändern oder deine Daten analysieren.</p>
+      <p class="api-key-hint ${aiApiKey ? 'hidden' : ''}">Um zu starten, hinterlege bitte einen OpenAI API-Key in den Einstellungen oder tippe ihn hier ein.</p>
+    </div>
+  `;
+}
+
+function showTypingIndicator() {
+  const existingIndicator = document.getElementById('typingIndicator');
+  if (existingIndicator) return;
+  
+  const indicator = document.createElement('div');
+  indicator.id = 'typingIndicator';
+  indicator.className = 'message assistant typing-indicator';
+  indicator.innerHTML = '<span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>';
+  aiMessages.appendChild(indicator);
+  scrollChatToBottom();
+}
+
+function hideTypingIndicator() {
+  const indicator = document.getElementById('typingIndicator');
+  if (indicator) indicator.remove();
+}
+
+function appendToolMessage(toolName, isStart = true) {
+  const toolLabels = {
+    'get_data': { start: '📊 Lade Daten...', end: '✅ Daten geladen' },
+    'add_entry': { start: '➕ Füge Eintrag hinzu...', end: '✅ Eintrag hinzugefügt' },
+    'delete_entry': { start: '🗑️ Lösche Eintrag...', end: '✅ Eintrag gelöscht' },
+    'update_entry': { start: '✏️ Aktualisiere Eintrag...', end: '✅ Eintrag aktualisiert' },
+    'set_goals': { start: '🎯 Setze Ziele...', end: '✅ Ziele gespeichert' },
+    'add_custom_food': { start: '🍽️ Speichere Gericht...', end: '✅ Gericht gespeichert' }
+  };
+  
+  const label = toolLabels[toolName] || { start: '⏳ Verarbeite...', end: '✅ Fertig' };
+  const text = isStart ? label.start : label.end;
+  
+  const msgEl = document.createElement('div');
+  msgEl.className = 'message system tool-message';
+  msgEl.innerHTML = `<p>${text}</p>`;
+  aiMessages.appendChild(msgEl);
+  scrollChatToBottom();
 }
 
 
@@ -1523,6 +1584,12 @@ async function renderStatistics() {
   `;
 }
 
+function scrollChatToBottom() {
+  requestAnimationFrame(() => {
+    aiMessages.scrollTop = aiMessages.scrollHeight;
+  });
+}
+
 function appendMessage(role, content) {
   const msgEl = document.createElement('div');
   msgEl.className = `message ${role}`;
@@ -1543,6 +1610,9 @@ function appendMessage(role, content) {
     const img = document.createElement('img');
     img.src = imageUrl;
     img.className = 'message-image';
+    img.loading = 'eager';
+    // Handle image load to scroll properly
+    img.onload = scrollChatToBottom;
     msgEl.appendChild(img);
   }
 
@@ -1558,13 +1628,13 @@ function appendMessage(role, content) {
         aiInput.value = textContent;
         aiInput.focus();
         aiInput.style.height = 'auto';
-        aiInput.style.height = aiInput.scrollHeight + 'px';
+        aiInput.style.height = Math.min(aiInput.scrollHeight, 120) + 'px';
       }
     });
   }
 
   aiMessages.appendChild(msgEl);
-  aiMessages.scrollTop = aiMessages.scrollHeight;
+  scrollChatToBottom();
 }
 
 async function handleAiMessage() {
@@ -1572,7 +1642,6 @@ async function handleAiMessage() {
   if (!text && !pendingImageBase64) return;
 
   if (!aiApiKey) {
-    // ... (API Key handling remains same)
     if (text.startsWith('sk-')) {
       aiApiKey = text;
       localStorage.setItem('openai_api_key', aiApiKey);
@@ -1582,19 +1651,30 @@ async function handleAiMessage() {
             method: 'POST',
             body: [{ id: 'openai_api_key', value: aiApiKey }]
           });
-          appendMessage('system', 'API-Key sicher in der Cloud gespeichert!');
+          appendMessage('system', '🔐 API-Key sicher in der Cloud gespeichert!');
         } catch (e) {
-          appendMessage('system', 'API-Key lokal gespeichert.');
+          appendMessage('system', '🔐 API-Key lokal gespeichert.');
         }
+      } else {
+        appendMessage('system', '🔐 API-Key lokal gespeichert.');
       }
+      const keyHint = document.querySelector('.api-key-hint');
+      if (keyHint) keyHint.classList.add('hidden');
       aiInput.value = '';
+      aiInput.style.height = 'auto';
       return;
     } else {
       appendMessage('user', text || 'Bild gesendet');
       appendMessage('assistant', 'Bitte gib zuerst deinen OpenAI API-Key ein (beginnend mit sk-).');
       aiInput.value = '';
+      aiInput.style.height = 'auto';
       return;
     }
+  }
+
+  // Update system prompt with current date before sending
+  if (chatHistory.length > 0 && chatHistory[0].role === 'system') {
+    chatHistory[0] = getSystemPrompt();
   }
 
   const userMessageContent = [];
@@ -1608,13 +1688,20 @@ async function handleAiMessage() {
 
   appendMessage('user', userMessageContent);
   aiInput.value = '';
+  aiInput.style.height = 'auto';
   clearPendingImage();
 
   chatHistory.push({ role: 'user', content: userMessageContent });
+  
+  // Disable input while processing
+  aiInput.disabled = true;
+  aiSendBtn.disabled = true;
+  showTypingIndicator();
 
   try {
     let keepProcessing = true;
     let maxRounds = 5; // Safety limit
+    let uiNeedsRefresh = false;
 
     while (keepProcessing && maxRounds > 0) {
       maxRounds--;
@@ -1625,17 +1712,31 @@ async function handleAiMessage() {
       chatHistory.push(message);
 
       if (message.tool_calls) {
+        hideTypingIndicator();
+        
         for (const toolCall of message.tool_calls) {
+          const toolName = toolCall.function.name;
+          appendToolMessage(toolName, true);
+          
           const result = await executeTool(toolCall);
+          
+          // Check if UI needs refresh
+          if (['add_entry', 'delete_entry', 'update_entry', 'set_goals', 'add_custom_food'].includes(toolName)) {
+            uiNeedsRefresh = true;
+          }
+          
           chatHistory.push({
             tool_call_id: toolCall.id,
             role: 'tool',
-            name: toolCall.function.name,
+            name: toolName,
             content: JSON.stringify(result)
           });
         }
+        
+        showTypingIndicator();
         // After processing tools, the loop will call AI again with the results
       } else {
+        hideTypingIndicator();
         // No tool calls? We are done, show the message to the user
         if (message.content) {
           appendMessage('assistant', message.content);
@@ -1645,13 +1746,36 @@ async function handleAiMessage() {
     }
     
     if (maxRounds === 0) {
-      appendMessage('system', 'Hinweis: Die KI hat zu viele Schritte benötigt.');
+      hideTypingIndicator();
+      appendMessage('system', '⚠️ Die KI hat zu viele Schritte benötigt.');
+    }
+    
+    // Refresh UI if data was modified
+    if (uiNeedsRefresh) {
+      await renderTracking();
+      await renderGoals();
     }
 
   } catch (error) {
+    hideTypingIndicator();
     console.error('AI Error:', error);
-    appendMessage('system', `Fehler: ${error.message}`);
-    // Optional: remove last user message if it failed to keep history clean
+    
+    // Better error messages
+    let errorMsg = error.message;
+    if (errorMsg.includes('401') || errorMsg.includes('Incorrect API key')) {
+      errorMsg = 'Ungültiger API-Key. Bitte überprüfe deinen OpenAI API-Key.';
+    } else if (errorMsg.includes('429')) {
+      errorMsg = 'Zu viele Anfragen. Bitte warte einen Moment.';
+    } else if (errorMsg.includes('500') || errorMsg.includes('502') || errorMsg.includes('503')) {
+      errorMsg = 'OpenAI-Server nicht erreichbar. Bitte versuche es später erneut.';
+    }
+    
+    appendMessage('system', `❌ ${errorMsg}`);
+  } finally {
+    // Re-enable input
+    aiInput.disabled = false;
+    aiSendBtn.disabled = false;
+    aiInput.focus();
   }
 }
 
@@ -1667,13 +1791,55 @@ async function handleImageSelect(e) {
   const file = e.target.files[0];
   if (!file) return;
 
-  const reader = new FileReader();
-  reader.onload = (event) => {
-    pendingImageBase64 = event.target.result;
+  // Compress image for better performance
+  try {
+    const compressedBase64 = await compressImage(file, 1024, 0.8);
+    pendingImageBase64 = compressedBase64;
     aiImagePreview.querySelector('img').src = pendingImageBase64;
     aiImagePreview.classList.remove('hidden');
-  };
-  reader.readAsDataURL(file);
+  } catch (err) {
+    console.warn('Image compression failed, using original', err);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      pendingImageBase64 = event.target.result;
+      aiImagePreview.querySelector('img').src = pendingImageBase64;
+      aiImagePreview.classList.remove('hidden');
+    };
+    reader.readAsDataURL(file);
+  }
+}
+
+function compressImage(file, maxSize = 1024, quality = 0.8) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      
+      // Scale down if larger than maxSize
+      if (width > maxSize || height > maxSize) {
+        if (width > height) {
+          height = Math.round((height * maxSize) / width);
+          width = maxSize;
+        } else {
+          width = Math.round((width * maxSize) / height);
+          height = maxSize;
+        }
+      }
+      
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      // Convert to JPEG for smaller size
+      const base64 = canvas.toDataURL('image/jpeg', quality);
+      resolve(base64);
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
 }
 
 async function executeTool(toolCall) {
@@ -1835,13 +2001,40 @@ aiImageInput.addEventListener('change', handleImageSelect);
 aiRemoveImageBtn.addEventListener('click', clearPendingImage);
 statsRange.addEventListener('change', () => renderStatistics());
 
+// Clear chat button
+const clearChatBtn = document.getElementById('clearChatBtn');
+if (clearChatBtn) {
+  clearChatBtn.addEventListener('click', clearChatHistory);
+}
+
 aiInput.addEventListener('input', () => {
   aiInput.style.height = 'auto';
-  aiInput.style.height = (aiInput.scrollHeight) + 'px';
+  aiInput.style.height = Math.min(aiInput.scrollHeight, 120) + 'px';
 });
+
+// iOS Keyboard handling - scroll to bottom when focused
+aiInput.addEventListener('focus', () => {
+  // Small delay to let iOS keyboard appear
+  setTimeout(() => {
+    aiMessages.scrollTop = aiMessages.scrollHeight;
+  }, 300);
+});
+
+// Handle visualViewport resize (iOS keyboard)
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', () => {
+    if (currentView === 'aiChat') {
+      // Scroll chat to bottom when keyboard appears/disappears
+      setTimeout(() => {
+        aiMessages.scrollTop = aiMessages.scrollHeight;
+      }, 100);
+    }
+  });
+}
 
 window.addEventListener('hashchange', initFromHash);
 
 renderMealPicker(guessMealByTime());
 applyEntryModalLayout();
+initChatHistory();
 initFromHash();
