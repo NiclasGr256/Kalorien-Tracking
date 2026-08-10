@@ -1146,14 +1146,18 @@ function createEntryEl(entry) {
       </div>
     </div>
     <span class="entry-kcal">${entry.kcal}</span>
-    <div class="entry-actions">
+        <div class="entry-actions">
+      <button type="button" data-copy="${entry.id}" title="Nach heute kopieren" aria-label="Nach heute kopieren">📋</button>
       <button type="button" data-edit="${entry.id}" aria-label="Bearbeiten">✎</button>
       <button type="button" class="delete-btn" data-delete="${entry.id}" aria-label="Löschen">✕</button>
     </div>
+
   `;
 
+    el.querySelector('[data-copy]').addEventListener('click', () => openCopyModal(entry));
   el.querySelector('[data-edit]').addEventListener('click', () => openEditModal(entry));
   el.querySelector('[data-delete]').addEventListener('click', () => deleteEntry(entry.id));
+
 
   return el;
 }
@@ -1243,6 +1247,38 @@ function openEditModal(entry) {
     foodName.scrollIntoView({ block: 'center', behavior: 'smooth' });
   });
 }
+
+function openCopyModal(entry) {
+  editingEntryId = null;
+  document.getElementById('modalTitle').textContent = 'Eintrag nach heute kopieren';
+  
+  // Set date to today
+  selectedDate = startOfDay(new Date());
+  
+  renderMealPicker(entry.meal);
+  foodName.value = entry.name;
+  foodWeight.value = String(entry.weightGrams ?? '');
+  foodUnitLabel.textContent = entry.unit || 'g';
+  foodKcal.value = String(entry.kcal);
+  foodProtein.value = String(entry.protein ?? 0);
+  foodCarbs.value = String(entry.carbs ?? 0);
+  foodFat.value = String(entry.fat ?? 0);
+  foodFiber.value = String(entry.fiber ?? 0);
+  selectedFoodBaseNutrition = null;
+  clearSearchResults();
+  applyEntryModalLayout();
+  document.body.classList.add('modal-open');
+  entryModal.showModal();
+  
+  // Update the background tracking view to today
+  renderTracking();
+  
+  requestAnimationFrame(() => {
+    foodName.focus();
+    foodName.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  });
+}
+
 
 async function saveEntry(e) {
   e.preventDefault();
