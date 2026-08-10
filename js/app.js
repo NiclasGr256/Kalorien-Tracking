@@ -1,7 +1,9 @@
-import { getEntryFormLayoutMode } from './mobile-entry-utils.js';
-import { callAi } from './ai.js';
-import { MEAL_ORDER, MEAL_LABELS, normalizeMealValue, guessMealByTime } from './meal-utils.js';
-import { GOAL_NUTRIENTS, normalizeGoalValues, buildGoalRows, formatGoalPercent, parseNumericInput } from './goals.js';
+import { getEntryFormLayoutMode } from './mobile-entry-utils.mjs';
+import { callAi } from './ai.mjs';
+import { MEAL_ORDER, MEAL_LABELS, normalizeMealValue, guessMealByTime } from './meal-utils.mjs';
+import { GOAL_NUTRIENTS, normalizeGoalValues, buildGoalRows, formatGoalPercent, parseNumericInput } from './goals.mjs';
+import { createEntryTemplate } from './ui-components.mjs';
+
 
 function upsertCustomFood(data, foodInput, existingId = null) {
   const normalized = {
@@ -1134,33 +1136,20 @@ function groupByMeal(entries) {
   return map;
 }
 
+import { createEntryTemplate } from './ui-components.js';
+
 function createEntryEl(entry) {
   const el = document.createElement('div');
   el.className = 'entry';
-  const unit = entry.unit || 'g';
-  el.innerHTML = `
-    <div class="entry-info">
-      <div class="entry-main">
-        <div class="entry-name">${escapeHtml(entry.name)}</div>
-        <div class="entry-subtext">${entry.weightGrams || 0} ${unit} · ${entry.kcal} kcal · P ${getEntryProtein(entry)} g · F ${getEntryFat(entry)} g · K ${getEntryCarbs(entry)} g · B ${getEntryFiber(entry)} g</div>
-      </div>
-    </div>
-    <span class="entry-kcal">${entry.kcal}</span>
-        <div class="entry-actions">
-      <button type="button" data-copy="${entry.id}" title="Nach heute kopieren" aria-label="Nach heute kopieren">📋</button>
-      <button type="button" data-edit="${entry.id}" aria-label="Bearbeiten">✎</button>
-      <button type="button" class="delete-btn" data-delete="${entry.id}" aria-label="Löschen">✕</button>
-    </div>
+  el.innerHTML = createEntryTemplate(entry);
 
-  `;
-
-    el.querySelector('[data-copy]').addEventListener('click', () => openCopyModal(entry));
+  el.querySelector('[data-copy]').addEventListener('click', () => openCopyModal(entry));
   el.querySelector('[data-edit]').addEventListener('click', () => openEditModal(entry));
   el.querySelector('[data-delete]').addEventListener('click', () => deleteEntry(entry.id));
 
-
   return el;
 }
+
 
 
 function escapeHtml(str) {

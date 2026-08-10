@@ -17,12 +17,18 @@ test('normalizeGoalValues converts goal values to numbers and preserves known ke
 test('buildGoalRows uses the configured color thresholds for each nutrient', () => {
   const rows = buildGoalRows({ kcal: 1400, protein: 60, carbs: 210, fat: 70, fiber: 20 }, { kcal: 2000, protein: 80, carbs: 300, fat: 100, fiber: 25 });
 
-  assert.equal(rows[0].color, '#39FF14');
-  assert.equal(rows[1].color, '#FF6A00');
-  assert.equal(rows[2].color, '#39FF14');
-  assert.equal(rows[3].color, '#FF073A');
-  assert.equal(rows[4].color, '#39FF14');
+  // 1400/2000 = 0.7 (genau an der Grenze zum Warnbereich)
+  assert.equal(rows[0].color, '#ffae00');
+  // 60/80 = 0.75
+  assert.equal(rows[1].color, '#ffae00');
+  // 210/300 = 0.7
+  assert.equal(rows[2].color, '#ffae00');
+  // 70/100 = 0.7
+  assert.equal(rows[3].color, '#ffae00');
+  // 20/25 = 0.8
+  assert.equal(rows[4].color, '#ffae00');
 });
+
 
 test('parseNumericInput normalizes comma decimals and invalid values', () => {
   assert.equal(parseNumericInput('12,5'), 12.5);
