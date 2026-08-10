@@ -1237,7 +1237,19 @@ function openEditModal(entry) {
   foodCarbs.value = String(entry.carbs ?? 0);
   foodFat.value = String(entry.fat ?? 0);
   foodFiber.value = String(entry.fiber ?? 0);
-  selectedFoodBaseNutrition = null;
+
+  // Set base nutrition for automatic adjustment when weight changes
+  const originalWeight = Math.max(parseNumericValue(entry.weightGrams), 0.1);
+  selectedFoodBaseNutrition = {
+    kcal: (parseNumericValue(entry.kcal) / originalWeight) * 100,
+    protein: (parseNumericValue(entry.protein) / originalWeight) * 100,
+    carbs: (parseNumericValue(entry.carbs) / originalWeight) * 100,
+    fat: (parseNumericValue(entry.fat) / originalWeight) * 100,
+    fiber: (parseNumericValue(entry.fiber) / originalWeight) * 100,
+    baseAmount: 100,
+    unit: entry.unit || 'g'
+  };
+
   clearSearchResults();
   applyEntryModalLayout();
   document.body.classList.add('modal-open');
@@ -1247,6 +1259,7 @@ function openEditModal(entry) {
     foodName.scrollIntoView({ block: 'center', behavior: 'smooth' });
   });
 }
+
 
 function openCopyModal(entry) {
   editingEntryId = null;
@@ -1264,7 +1277,19 @@ function openCopyModal(entry) {
   foodCarbs.value = String(entry.carbs ?? 0);
   foodFat.value = String(entry.fat ?? 0);
   foodFiber.value = String(entry.fiber ?? 0);
-  selectedFoodBaseNutrition = null;
+
+  // Set base nutrition for automatic adjustment when weight changes
+  const originalWeight = Math.max(parseNumericValue(entry.weightGrams), 0.1);
+  selectedFoodBaseNutrition = {
+    kcal: (parseNumericValue(entry.kcal) / originalWeight) * 100,
+    protein: (parseNumericValue(entry.protein) / originalWeight) * 100,
+    carbs: (parseNumericValue(entry.carbs) / originalWeight) * 100,
+    fat: (parseNumericValue(entry.fat) / originalWeight) * 100,
+    fiber: (parseNumericValue(entry.fiber) / originalWeight) * 100,
+    baseAmount: 100,
+    unit: entry.unit || 'g'
+  };
+
   clearSearchResults();
   applyEntryModalLayout();
   document.body.classList.add('modal-open');
@@ -1278,6 +1303,7 @@ function openCopyModal(entry) {
     foodName.scrollIntoView({ block: 'center', behavior: 'smooth' });
   });
 }
+
 
 
 async function saveEntry(e) {
