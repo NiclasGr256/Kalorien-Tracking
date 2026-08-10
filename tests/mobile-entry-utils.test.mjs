@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isCompactEntryFormViewport, getEntryFormLayoutMode } from '../js/mobile-entry-utils.mjs';
+import { isCompactEntryFormViewport, getEntryFormLayoutMode } from '../js/mobile-entry-utils.js';
 
 test('isCompactEntryFormViewport erkennt mobile Breite', () => {
   // Breite <= 768px sollte true sein

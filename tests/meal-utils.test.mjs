@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeMealValue, guessMealByTime } from '../js/meal-utils.mjs';
+import { normalizeMealValue, guessMealByTime } from '../js/meal-utils.js';
+
 
 test('normalizeMealValue keeps known meal keys and falls back to snack', () => {
   assert.equal(normalizeMealValue('frühstück'), 'frühstück');

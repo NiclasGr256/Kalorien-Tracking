@@ -1,11 +1,11 @@
-import { getEntryFormLayoutMode } from './mobile-entry-utils.mjs';
-import { callAi } from './ai.mjs';
-import { MEAL_ORDER, MEAL_LABELS, normalizeMealValue, guessMealByTime } from './meal-utils.mjs';
-import { GOAL_NUTRIENTS, normalizeGoalValues, buildGoalRows, formatGoalPercent, parseNumericInput } from './goals.mjs';
-import { createEntryTemplate } from './ui-components.mjs';
-
+import { getEntryFormLayoutMode } from './mobile-entry-utils.js';
+import { callAi } from './ai.js';
+import { MEAL_ORDER, MEAL_LABELS, normalizeMealValue, guessMealByTime } from './meal-utils.js';
+import { GOAL_NUTRIENTS, normalizeGoalValues, buildGoalRows, formatGoalPercent, parseNumericInput } from './goals.js';
+import { createEntryTemplate } from './ui-components.js';
 
 function upsertCustomFood(data, foodInput, existingId = null) {
+
   const normalized = {
     ...data,
     customFoods: Array.isArray(data?.customFoods) ? [...data.customFoods] : [],
@@ -1136,8 +1136,6 @@ function groupByMeal(entries) {
   return map;
 }
 
-import { createEntryTemplate } from './ui-components.js';
-
 function createEntryEl(entry) {
   const el = document.createElement('div');
   el.className = 'entry';
@@ -1149,6 +1147,7 @@ function createEntryEl(entry) {
 
   return el;
 }
+
 
 
 

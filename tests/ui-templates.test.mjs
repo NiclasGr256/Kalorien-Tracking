@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createEntryTemplate, createGoalCardTemplate, escapeHtml } from '../js/ui-components.mjs';
+import { createEntryTemplate, createGoalCardTemplate, escapeHtml } from '../js/ui-components.js';
 
 test('escapeHtml verhindert XSS Angriffe', () => {
   const unsafe = '<img src=x onerror=alert(1)>';

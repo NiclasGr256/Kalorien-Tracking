@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { upsertCustomFood } from '../js/custom-foods.mjs';
+import { upsertCustomFood } from '../js/custom-foods.js';
+
 
 test('upsertCustomFood updates an existing custom food instead of duplicating it', () => {
   const data = {

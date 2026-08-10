@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeGoalValues, buildGoalRows, parseNumericInput } from '../js/goals.mjs';
+import { normalizeGoalValues, buildGoalRows, parseNumericInput } from '../js/goals.js';
+
 
 test('normalizeGoalValues converts goal values to numbers and preserves known keys', () => {
   const normalized = normalizeGoalValues({ kcal: '2200', protein: '120', carbs: '240', fat: '80', fiber: '30', unknown: '5' });
