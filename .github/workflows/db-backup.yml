@@ -1,0 +1,36 @@
+name: Database Backup
+
+on:
+  schedule:
+    - cron: '0 2 * * *' # Täglich um 02:00 UTC
+  workflow_dispatch: # Erlaubt manuelles Auslösen per Klick
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install PostgreSQL Client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Create Backup Directory
+        run: mkdir -p backups
+
+      - name: Create Dump
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          # Timestamp für den Dateinamen
+          TIMESTAMP=$(date +'%Y-%m-%d_%H-%M-%S')
+          echo "FILENAME=supabase-backup-$TIMESTAMP.sql.gz" >> $GITHUB_ENV
+          
+          # pg_dump ausführen und direkt zippen
+          pg_dump -h db.eipttbdhaqyspkhqoqur.supabase.co -U postgres -d postgres | gzip > backups/supabase-backup-$TIMESTAMP.sql.gz
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.FILENAME }}
+          path: backups/*.gz
+          retention-days: 30
