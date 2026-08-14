@@ -1,6 +1,6 @@
 export async function callAi(messages, apiKey) {
   const body = {
-    model: 'gpt-4o',
+    model: 'gpt-4o-mini',
     messages: messages,
     tools: [
       {
