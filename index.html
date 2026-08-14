@@ -205,14 +205,14 @@
     </main>
 
         <!-- Statistics -->
-        <main class="main view hidden" id="viewStatistics">
+                <main class="main view hidden" id="viewStatistics">
           <div class="stats-container">
             <div class="stats-header">
-              <select id="statsRange" class="stats-select">
-                <option value="7">Letzte 7 Tage</option>
-                <option value="14">Letzte 14 Tage</option>
-                <option value="30">Letzte 30 Tage</option>
-              </select>
+              <div class="date-range-picker">
+                <input type="date" id="statsStartDate" class="stats-date-input">
+                <span>bis</span>
+                <input type="date" id="statsEndDate" class="stats-date-input">
+              </div>
             </div>
             <div class="stats-card stats-card--large">
               <h3>Kalorien & Protein</h3>

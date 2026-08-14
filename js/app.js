@@ -510,7 +510,8 @@ const aiImagePreview = document.getElementById('aiImagePreview');
 const aiRemoveImageBtn = document.getElementById('aiRemoveImageBtn');
 const viewAiChat = document.getElementById('viewAiChat');
 const viewStatistics = document.getElementById('viewStatistics');
-const statsRange = document.getElementById('statsRange');
+const statsStartDate = document.getElementById('statsStartDate');
+const statsEndDate = document.getElementById('statsEndDate');
 const appEl = document.getElementById('app');
 const confirmModal = document.getElementById('confirmModal');
 const confirmOk = document.getElementById('confirmOk');
@@ -1540,14 +1541,28 @@ function appendToolMessage(toolName, isStart = true) {
 
 async function renderStatistics() {
   const data = await loadData();
-  const range = parseInt(statsRange.value) || 7;
-  const daysToShow = [];
   
-  for (let i = range - 1; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    daysToShow.push(dateKey(d));
+  // Initialize date range if not set
+  if (!statsStartDate.value || !statsEndDate.value) {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(end.getDate() - 6); // Last 7 days including today
+    
+    statsStartDate.value = dateKey(start);
+    statsEndDate.value = dateKey(end);
   }
+
+  const start = parseDateKey(statsStartDate.value);
+  const end = parseDateKey(statsEndDate.value);
+  
+  const daysToShow = [];
+  let current = new Date(start);
+  while (current <= end) {
+    daysToShow.push(dateKey(current));
+    current.setDate(current.getDate() + 1);
+  }
+
+  const range = daysToShow.length || 1;
 
   const kcalData = daysToShow.map(key => sumKcal(data.days[key] || []));
   const proteinData = daysToShow.map(key => sumProtein(data.days[key] || []));
@@ -1576,7 +1591,7 @@ async function renderStatistics() {
           yAxisID: 'yKcal',
           order: 2
         },
-                {
+        {
           label: 'Protein (g)',
           data: proteinData,
           type: 'line',
@@ -1619,7 +1634,7 @@ async function renderStatistics() {
     }
   });
 
-    // Summary
+  // Summary
   const avgKcal = Math.round(kcalData.reduce((a, b) => a + b, 0) / range);
   const avgProtein = Math.round(proteinData.reduce((a, b) => a + b, 0) / range);
   
@@ -2051,7 +2066,8 @@ aiSendBtn.addEventListener('click', handleAiMessage);
 aiAttachBtn.addEventListener('click', () => aiImageInput.click());
 aiImageInput.addEventListener('change', handleImageSelect);
 aiRemoveImageBtn.addEventListener('click', clearPendingImage);
-statsRange.addEventListener('change', () => renderStatistics());
+statsStartDate.addEventListener('change', () => renderStatistics());
+statsEndDate.addEventListener('change', () => renderStatistics());
 
 // Clear chat button
 const clearChatBtn = document.getElementById('clearChatBtn');

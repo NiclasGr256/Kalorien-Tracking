@@ -680,20 +680,33 @@ body.modal-open {
 
 .stats-header {
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
   margin-bottom: 12px;
 }
 
-.stats-select {
+.date-range-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   background: var(--surface);
-  border: 1px solid var(--surface-2);
-  border-radius: 10px;
   padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--surface-2);
+}
+
+.stats-date-input {
+  background: transparent;
+  border: none;
+  color: var(--text);
   font-family: inherit;
   font-size: 0.9rem;
-  color: var(--text);
   outline: none;
   cursor: pointer;
+}
+
+.date-range-picker span {
+  color: var(--text-muted);
+  font-size: 0.8rem;
 }
 
 .stats-card {
