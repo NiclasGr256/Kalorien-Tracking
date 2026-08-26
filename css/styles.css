@@ -1064,6 +1064,46 @@ body.modal-open {
 
 
 
+.weight-header-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 16px;
+  background: var(--surface);
+  padding: 12px;
+  border-radius: var(--radius);
+}
+
+.weight-date-display {
+  text-align: center;
+  flex: 1;
+}
+
+.weight-date-display h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.weight-history-section {
+  margin-top: 24px;
+}
+
+.weight-history-section h3 {
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  padding-left: 4px;
+}
+
+.weight-form {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
 /* FAB */
 .fab {
   position: fixed;

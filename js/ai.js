@@ -110,6 +110,22 @@ export async function callAi(messages, apiKey) {
             required: ['id', 'date']
           }
         }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'set_weight',
+          description: 'Speichert das Körpergewicht für ein bestimmtes Datum.',
+          parameters: {
+            type: 'object',
+            properties: {
+              date: { type: 'string', description: 'Datum im Format YYYY-MM-DD' },
+              weight: { type: 'number', description: 'Gewicht in kg' },
+              period: { type: 'boolean', description: 'Ob der Nutzer die Periode hat' }
+            },
+            required: ['date', 'weight']
+          }
+        }
       }
       ],
       tool_choice: 'auto'

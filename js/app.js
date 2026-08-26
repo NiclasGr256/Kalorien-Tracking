@@ -41,8 +41,7 @@ function upsertCustomFood(data, foodInput, existingId = null) {
 const STORAGE_KEY = 'kalorien-tracker-v1';
 const DB_NAME = 'kalorien-tracker';
 const DB_VERSION = 1;
-const DB_STORE = 'days';
-const DB_STORE_CUSTOM_FOODS = 'custom-foods';
+const DB_STORE_WEIGHT = 'weight';
 const SUPABASE_CONFIG = window.SUPABASE_CONFIG || {};
 const SUPABASE_URL = SUPABASE_CONFIG.url || 'https://eipttbdhaqyspkhqoqur.supabase.co';
 const SUPABASE_ANON_KEY = SUPABASE_CONFIG.anonKey || '';
@@ -100,6 +99,7 @@ let selectedDate = startOfDay(new Date());
 /** @type {string|null} */
 let editingEntryId = null;
 let editingCustomFoodId = null;
+let selectedWeightDate = startOfDay(new Date());
 
 async function openDb() {
   if (!window.indexedDB) return null;
@@ -118,8 +118,11 @@ async function openDb() {
       if (!db.objectStoreNames.contains(DB_STORE)) {
         db.createObjectStore(DB_STORE, { keyPath: 'date' });
       }
-      if (!db.objectStoreNames.contains(DB_STORE_CUSTOM_FOODS)) {
+            if (!db.objectStoreNames.contains(DB_STORE_CUSTOM_FOODS)) {
         db.createObjectStore(DB_STORE_CUSTOM_FOODS, { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains(DB_STORE_WEIGHT)) {
+        db.createObjectStore(DB_STORE_WEIGHT, { keyPath: 'date' });
       }
     };
   });
@@ -132,6 +135,7 @@ function normalizeData(data) {
     goals: data?.goals || {},
     colors: data?.colors || {},
     thresholds: data?.thresholds || {},
+    weight: data?.weight || {},
   };
 }
 
@@ -156,7 +160,7 @@ async function loadData() {
 
   if (isSupabaseConfigured()) {
     try {
-      const [entriesRows, foodsRows, settingsRows] = await Promise.all([
+            const [entriesRows, foodsRows, settingsRows, weightRows] = await Promise.all([
         (async () => {
           try {
             return await supabaseRequest('/entries?select=id,date,meal,name,kcal,protein,carbs,fat,fiber,weight_grams,unit,created_at&order=created_at.asc');
@@ -174,12 +178,20 @@ async function loadData() {
           }
         })(),
         supabaseRequest('/settings?select=id,value'),
+        supabaseRequest('/weight?select=date,value,period'),
       ]);
 
             // Handle settings (API Key, Goals, Colors, Thresholds)
       const goals = localData.goals || {};
       const colors = localData.colors || {};
       const thresholds = localData.thresholds || {};
+      const weight = {};
+
+      if (Array.isArray(weightRows)) {
+        for (const row of weightRows) {
+          weight[row.date] = { value: Number(row.value), period: Boolean(row.period) };
+        }
+      }
       
       if (Array.isArray(settingsRows)) {
         const keySetting = settingsRows.find(s => s.id === 'openai_api_key');
@@ -259,11 +271,11 @@ async function loadData() {
         : [];
 
 
-            // When Supabase is active, it's the source of truth.
+                        // When Supabase is active, it's the source of truth.
       // We overwrite local data with remote data to avoid "zombie" entries.
-      saveToLocalStorage({ days, customFoods, goals, colors, thresholds });
+      saveToLocalStorage({ days, customFoods, goals, colors, thresholds, weight });
 
-      return { days, customFoods, goals, colors, thresholds };
+      return { days, customFoods, goals, colors, thresholds, weight };
     } catch (error) {
 
       console.warn('Supabase load failed, falling back to localStorage', error);
@@ -300,7 +312,19 @@ async function loadData() {
       request.onerror = () => reject(request.error);
     });
 
-        return { days: daysData, customFoods: customFoodsData, goals: localData.goals || {}, colors: localData.colors || {}, thresholds: localData.thresholds || {} };
+    const weightData = await new Promise((resolve, reject) => {
+      const tx = db.transaction(DB_STORE_WEIGHT, 'readonly');
+      const store = tx.objectStore(DB_STORE_WEIGHT);
+      const request = store.getAll();
+      request.onsuccess = () => {
+        const weight = {};
+        for (const record of request.result) weight[record.date] = { value: record.value, period: record.period };
+        resolve(Object.keys(weight).length ? weight : localData.weight);
+      };
+      request.onerror = () => reject(request.error);
+    });
+
+        return { days: daysData, customFoods: customFoodsData, goals: localData.goals || {}, colors: localData.colors || {}, thresholds: localData.thresholds || {}, weight: weightData };
   } catch (error) {
     console.warn('IndexedDB load failed, falling back to localStorage', error);
     return localData;
@@ -401,7 +425,7 @@ async function saveData(data) {
         }
       }
 
-      // Save Thresholds to Supabase
+            // Save Thresholds to Supabase
       if (normalizedData.thresholds && Object.keys(normalizedData.thresholds).length > 0) {
         try {
           await supabaseRequest('/settings?on_conflict=id', {
@@ -410,6 +434,22 @@ async function saveData(data) {
           });
         } catch (err) {
           console.warn('Failed to save thresholds to Supabase', err);
+        }
+      }
+
+      // Save Weight to Supabase
+      if (normalizedData.weight && Object.keys(normalizedData.weight).length > 0) {
+        const weightPayload = Object.entries(normalizedData.weight).map(([date, data]) => ({
+          date,
+          value: data.value,
+          period: data.period
+        }));
+        try {
+          for (const item of weightPayload) {
+            await supabaseRequest('/weight?on_conflict=date', { method: 'POST', body: [item] });
+          }
+        } catch (err) {
+          console.warn('Failed to save weight to Supabase', err);
         }
       }
     } catch (error) {
@@ -422,10 +462,11 @@ async function saveData(data) {
     const db = await openDb();
     if (!db) return;
 
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction([DB_STORE, DB_STORE_CUSTOM_FOODS], 'readwrite');
+        await new Promise((resolve, reject) => {
+      const tx = db.transaction([DB_STORE, DB_STORE_CUSTOM_FOODS, DB_STORE_WEIGHT], 'readwrite');
       const daysStore = tx.objectStore(DB_STORE);
       const customFoodsStore = tx.objectStore(DB_STORE_CUSTOM_FOODS);
+      const weightStore = tx.objectStore(DB_STORE_WEIGHT);
 
       daysStore.clear();
       for (const [date, entries] of Object.entries(normalizedData.days)) {
@@ -437,6 +478,11 @@ async function saveData(data) {
       customFoodsStore.clear();
       for (const food of normalizedData.customFoods) {
         customFoodsStore.put(food);
+      }
+
+      weightStore.clear();
+      for (const [date, data] of Object.entries(normalizedData.weight)) {
+        weightStore.put({ date, value: data.value, period: data.period });
       }
 
       tx.oncomplete = () => resolve();
@@ -510,6 +556,17 @@ const aiImagePreview = document.getElementById('aiImagePreview');
 const aiRemoveImageBtn = document.getElementById('aiRemoveImageBtn');
 const viewAiChat = document.getElementById('viewAiChat');
 const viewStatistics = document.getElementById('viewStatistics');
+const viewWeight = document.getElementById('viewWeight');
+const viewWeightStats = document.getElementById('viewWeightStats');
+const weightForm = document.getElementById('weightForm');
+const weightInput = document.getElementById('weightInput');
+const periodInput = document.getElementById('periodInput');
+const weightTableBody = document.getElementById('weightTableBody');
+const weightDateLabel = document.getElementById('weightDateLabel');
+const weightDateSub = document.getElementById('weightDateSub');
+const prevWeightDay = document.getElementById('prevWeightDay');
+const nextWeightDay = document.getElementById('nextWeightDay');
+const weightStatsSummary = document.getElementById('weightStatsSummary');
 const statsStartDate = document.getElementById('statsStartDate');
 const statsEndDate = document.getElementById('statsEndDate');
 const appEl = document.getElementById('app');
@@ -525,6 +582,7 @@ let selectedFoodBaseNutrition = null;
 let aiApiKey = localStorage.getItem('openai_api_key') || '';
 let pendingImageBase64 = null;
 let combinedChart = null;
+let weightChart = null;
 let chatHistory = [];
 
 function getSystemPrompt() {
@@ -890,6 +948,8 @@ async function setView(view) {
   const isGoals = view === 'goals';
   const isAiChat = view === 'aiChat';
   const isStatistics = view === 'statistics';
+  const isWeight = view === 'weight';
+  const isWeightStats = view === 'weightStats';
 
   viewTracking.classList.toggle('hidden', !isTracking);
   viewHistory.classList.toggle('hidden', !isHistory);
@@ -897,25 +957,29 @@ async function setView(view) {
   viewGoals.classList.toggle('hidden', !isGoals);
   viewAiChat.classList.toggle('hidden', !isAiChat);
   viewStatistics.classList.toggle('hidden', !isStatistics);
+  viewWeight.classList.toggle('hidden', !isWeight);
+  viewWeightStats.classList.toggle('hidden', !isWeightStats);
   
   headerTracking.classList.toggle('hidden', !isTracking);
-  headerHistory.classList.toggle('hidden', !isHistory && !isCustomFoods && !isGoals && !isAiChat && !isStatistics);
+  headerHistory.classList.toggle('hidden', !isHistory && !isCustomFoods && !isGoals && !isAiChat && !isStatistics && !isWeight && !isWeightStats);
   addBtn.classList.toggle('hidden', !isTracking);
   appEl.classList.toggle('app--no-fab', !isTracking);
 
-  pageTitle.textContent = isHistory ? 'Übersicht' : isCustomFoods ? 'Gerichte' : isGoals ? 'Ziele' : isAiChat ? 'KI Chat' : isStatistics ? 'Statistiken' : 'Übersicht';
+  pageTitle.textContent = isHistory ? 'Übersicht' : isCustomFoods ? 'Gerichte' : isGoals ? 'Ziele' : isAiChat ? 'KI Chat' : isStatistics ? 'Statistiken' : isWeight ? 'Gewicht' : isWeightStats ? 'Gewichtsverlauf' : 'Übersicht';
 
   navDrawer.querySelectorAll('.nav-item').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.view === view);
   });
 
-  location.hash = view === 'history' ? '#/history' : view === 'customFoods' ? '#/gerichte' : view === 'goals' ? '#/ziele' : view === 'aiChat' ? '#/ki-chat' : view === 'statistics' ? '#/statistiken' : '#/';
+  location.hash = view === 'history' ? '#/history' : view === 'customFoods' ? '#/gerichte' : view === 'goals' ? '#/ziele' : view === 'aiChat' ? '#/ki-chat' : view === 'statistics' ? '#/statistiken' : view === 'weight' ? '#/gewicht' : view === 'weightStats' ? '#/gewichtsverlauf' : '#/';
 
   if (isTracking) await renderTracking();
   else if (isCustomFoods) await renderCustomFoods();
   else if (isGoals) await renderGoals();
   else if (isAiChat) await renderAiChat();
   else if (isStatistics) await renderStatistics();
+  else if (isWeight) await renderWeight();
+  else if (isWeightStats) await renderWeightStats();
   else await renderHistory();
 
   closeNav();
@@ -1525,7 +1589,8 @@ function appendToolMessage(toolName, isStart = true) {
     'delete_entry': { start: '🗑️ Lösche Eintrag...', end: '✅ Eintrag gelöscht' },
     'update_entry': { start: '✏️ Aktualisiere Eintrag...', end: '✅ Eintrag aktualisiert' },
     'set_goals': { start: '🎯 Setze Ziele...', end: '✅ Ziele gespeichert' },
-    'add_custom_food': { start: '🍽️ Speichere Gericht...', end: '✅ Gericht gespeichert' }
+    'add_custom_food': { start: '🍽️ Speichere Gericht...', end: '✅ Gericht gespeichert' },
+    'set_weight': { start: '⚖️ Speichere Gewicht...', end: '✅ Gewicht gespeichert' }
   };
   
   const label = toolLabels[toolName] || { start: '⏳ Verarbeite...', end: '✅ Fertig' };
@@ -1538,6 +1603,178 @@ function appendToolMessage(toolName, isStart = true) {
   scrollChatToBottom();
 }
 
+
+async function renderWeight() {
+  const data = await loadData();
+  const weightData = data.weight || {};
+  const currentKey = dateKey(selectedWeightDate);
+  
+  weightDateLabel.textContent = formatDateLabel(selectedWeightDate);
+  weightDateSub.textContent = formatDateSub(selectedWeightDate);
+  nextWeightDay.disabled = isFuture(startOfDay(new Date(selectedWeightDate.getTime() + 86400000)));
+
+  if (weightData[currentKey]) {
+    weightInput.value = weightData[currentKey].value;
+    periodInput.checked = weightData[currentKey].period;
+  } else {
+    weightInput.value = '';
+    periodInput.checked = false;
+  }
+
+  weightTableBody.innerHTML = '';
+  
+  // Show last 7 days including selectedWeightDate
+  const tableDays = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(selectedWeightDate);
+    d.setDate(d.getDate() - i);
+    tableDays.push(dateKey(d));
+  }
+
+  for (const date of tableDays) {
+    const entry = weightData[date];
+    const d = parseDateKey(date);
+    
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${escapeHtml(formatTableDate(date))}</td>
+      <td class="num">${entry ? entry.value.toLocaleString('de-DE') + ' kg' : '—'}</td>
+      <td class="num">${entry && entry.period ? '<span class="period-indicator">Ja</span>' : '—'}</td>
+      <td class="num">
+        ${entry ? `<button type="button" class="weight-entry-delete" data-date="${date}" style="background:none; border:none; color:var(--over); cursor:pointer; font-size:1.1rem;">✕</button>` : ''}
+      </td>
+    `;
+    
+    if (entry) {
+      tr.querySelector('.weight-entry-delete').addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteWeightEntry(date);
+      });
+      tr.style.cursor = 'pointer';
+      tr.addEventListener('click', () => {
+        selectedWeightDate = parseDateKey(date);
+        renderWeight();
+      });
+    }
+    
+    weightTableBody.appendChild(tr);
+  }
+}
+
+async function saveWeight(e) {
+  e.preventDefault();
+  const value = parseNumericValue(weightInput.value);
+  if (!value || value <= 0) return;
+
+  const data = await loadData();
+  const currentKey = dateKey(selectedWeightDate);
+  data.weight[currentKey] = { value, period: periodInput.checked };
+  await saveData(data);
+  await renderWeight();
+  alert('Gewicht für ' + formatDateLabel(selectedWeightDate) + ' gespeichert!');
+}
+
+async function deleteWeightEntry(date) {
+  const confirmed = await showConfirm('Eintrag löschen', 'Diesen Gewichtseintrag wirklich löschen?');
+  if (!confirmed) return;
+
+  const data = await loadData();
+  delete data.weight[date];
+  
+  if (isSupabaseConfigured()) {
+    try {
+      await supabaseRequest(`/weight?date=eq.${encodeURIComponent(date)}`, { method: 'DELETE' });
+    } catch (err) {
+      console.warn('Supabase delete weight failed', err);
+    }
+  }
+
+  await saveData(data);
+  await renderWeight();
+}
+
+async function renderWeightStats() {
+  const data = await loadData();
+  const weightData = data.weight || {};
+  
+  const daysToShow = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    daysToShow.push(dateKey(d));
+  }
+
+  const values = daysToShow.map(key => weightData[key]?.value || null);
+  const periods = daysToShow.map(key => weightData[key]?.period || false);
+  const labels = daysToShow.map(key => {
+    const d = parseDateKey(key);
+    return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+  });
+
+  if (weightChart) weightChart.destroy();
+
+  weightChart = new Chart(document.getElementById('weightChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Gewicht (kg)',
+        data: values,
+        borderColor: '#EC4899',
+        backgroundColor: 'rgba(236, 72, 153, 0.1)',
+        borderWidth: 3,
+        pointRadius: 5,
+        pointBackgroundColor: periods.map(p => p ? '#ef4444' : '#EC4899'),
+        pointBorderColor: periods.map(p => p ? '#ef4444' : '#EC4899'),
+        tension: 0.3,
+        spanGaps: true
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: {
+          beginAtZero: false,
+          title: { display: true, text: 'kg' }
+        }
+      },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            afterLabel: (context) => {
+              const index = context.dataIndex;
+              return periods[index] ? ' (Periode)' : '';
+            }
+          }
+        }
+      }
+    }
+  });
+
+  // Summary
+  const validValues = values.filter(v => v !== null);
+  if (validValues.length > 0) {
+    const min = Math.min(...validValues);
+    const max = Math.max(...validValues);
+    const first = validValues[0];
+    const last = validValues[validValues.length - 1];
+    const diff = last - first;
+
+    weightStatsSummary.innerHTML = `
+      <div class="stats-summary-item">
+        <span>Min / Max</span>
+        <strong>${min.toLocaleString('de-DE')} - ${max.toLocaleString('de-DE')} kg</strong>
+      </div>
+      <div class="stats-summary-item">
+        <span>Differenz</span>
+        <strong style="color: ${diff <= 0 ? '#22C55E' : '#ef4444'}">${diff > 0 ? '+' : ''}${diff.toLocaleString('de-DE')} kg</strong>
+      </div>
+    `;
+  } else {
+    weightStatsSummary.innerHTML = '<p class="empty-state">Noch keine Gewichtsdaten für die letzten 30 Tage.</p>';
+  }
+}
 
 async function renderStatistics() {
   const data = await loadData();
@@ -1787,8 +2024,8 @@ async function handleAiMessage() {
           
           const result = await executeTool(toolCall);
           
-          // Check if UI needs refresh
-          if (['add_entry', 'delete_entry', 'update_entry', 'set_goals', 'add_custom_food'].includes(toolName)) {
+                    // Check if UI needs refresh
+          if (['add_entry', 'delete_entry', 'update_entry', 'set_goals', 'add_custom_food', 'set_weight'].includes(toolName)) {
             uiNeedsRefresh = true;
           }
           
@@ -1818,9 +2055,10 @@ async function handleAiMessage() {
     }
     
     // Refresh UI if data was modified
-    if (uiNeedsRefresh) {
+        if (uiNeedsRefresh) {
       await renderTracking();
       await renderGoals();
+      await renderWeight();
     }
 
   } catch (error) {
@@ -1964,7 +2202,7 @@ async function executeTool(toolCall) {
     return { success: true };
   }
 
-  if (name === 'update_entry') {
+    if (name === 'update_entry') {
     const data = await loadData();
     const key = args.date;
     if (data.days[key]) {
@@ -1978,6 +2216,14 @@ async function executeTool(toolCall) {
     return { success: false, error: 'Eintrag nicht gefunden' };
   }
 
+  if (name === 'set_weight') {
+    const data = await loadData();
+    const key = args.date;
+    data.weight[key] = { value: args.weight, period: Boolean(args.period) };
+    await saveData(data);
+    return { success: true };
+  }
+
   return { error: 'Tool nicht gefunden' };
 }
 
@@ -1988,6 +2234,8 @@ function initFromHash() {
   else if (hash === '#/ziele') setView('goals');
   else if (hash === '#/ki-chat') setView('aiChat');
   else if (hash === '#/statistiken') setView('statistics');
+  else if (hash === '#/gewicht') setView('weight');
+  else if (hash === '#/gewichtsverlauf') setView('weightStats');
   else setView('tracking');
 }
 
@@ -2068,6 +2316,19 @@ aiImageInput.addEventListener('change', handleImageSelect);
 aiRemoveImageBtn.addEventListener('click', clearPendingImage);
 statsStartDate.addEventListener('change', () => renderStatistics());
 statsEndDate.addEventListener('change', () => renderStatistics());
+
+prevWeightDay.addEventListener('click', () => {
+  selectedWeightDate.setDate(selectedWeightDate.getDate() - 1);
+  renderWeight();
+});
+
+nextWeightDay.addEventListener('click', () => {
+  if (nextWeightDay.disabled) return;
+  selectedWeightDate.setDate(selectedWeightDate.getDate() + 1);
+  renderWeight();
+});
+
+weightForm.addEventListener('submit', saveWeight);
 
 // Clear chat button
 const clearChatBtn = document.getElementById('clearChatBtn');

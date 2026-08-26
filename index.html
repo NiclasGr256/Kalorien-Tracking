@@ -204,8 +204,8 @@
       <div class="custom-food-list" id="customFoodList"></div>
     </main>
 
-        <!-- Statistics -->
-                <main class="main view hidden" id="viewStatistics">
+                <!-- Statistics -->
+        <main class="main view hidden" id="viewStatistics">
           <div class="stats-container">
             <div class="stats-header">
               <div class="date-range-picker">
@@ -223,6 +223,65 @@
             </div>
           </div>
         </main>
+
+                <!-- Weight Tracking -->
+        <main class="main view hidden" id="viewWeight">
+          <section class="weight-form-container">
+            <header class="weight-header-nav">
+              <button type="button" class="icon-btn" id="prevWeightDay" aria-label="Vorheriger Tag">‹</button>
+              <div class="weight-date-display">
+                <h2 id="weightDateLabel">Heute</h2>
+                <p id="weightDateSub" class="date-sub"></p>
+              </div>
+              <button type="button" class="icon-btn" id="nextWeightDay" aria-label="Nächster Tag">›</button>
+            </header>
+
+            <form class="weight-form" id="weightForm">
+              <label class="field">
+                <span>Gewicht (kg)</span>
+                <input type="text" id="weightInput" inputmode="decimal" placeholder="z.B. 65.5" autocomplete="off" required>
+              </label>
+
+              <label class="checkbox-field">
+                <input type="checkbox" id="periodInput">
+                <span>Periode</span>
+              </label>
+
+              <button type="submit" class="btn btn-primary">Gewicht speichern</button>
+            </form>
+          </section>
+
+          <div class="weight-history-section">
+            <h3>Letzte 7 Tage</h3>
+            <div class="table-wrap">
+              <table class="history-table">
+                <thead>
+                  <tr>
+                    <th>Tag</th>
+                    <th class="num">Gewicht</th>
+                    <th class="num">Periode</th>
+                    <th class="num">Aktion</th>
+                  </tr>
+                </thead>
+                <tbody id="weightTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </main>
+
+        <!-- Weight Statistics -->
+        <main class="main view hidden" id="viewWeightStats">
+          <div class="stats-container">
+            <div class="stats-card stats-card--large">
+              <h3>Gewichtsverlauf</h3>
+              <canvas id="weightChart"></canvas>
+            </div>
+            <div class="stats-summary" id="weightStatsSummary">
+              <!-- Dynamically filled -->
+            </div>
+          </div>
+        </main>
+
 
                 <!-- AI Chat -->
     <main class="main view hidden" id="viewAiChat">
@@ -274,7 +333,9 @@
         <button type="button" class="nav-item" data-view="goals">Ziele</button>
         <button type="button" class="nav-item" data-view="customFoods">Gerichte</button>
     <button type="button" class="nav-item" data-view="history">Übersicht</button>
-    <button type="button" class="nav-item" data-view="statistics">Statistiken</button>
+        <button type="button" class="nav-item" data-view="statistics">Statistiken</button>
+    <button type="button" class="nav-item" data-view="weight">Gewicht</button>
+    <button type="button" class="nav-item" data-view="weightStats">Gewichtsverlauf</button>
     <button type="button" class="nav-item" data-view="aiChat">KI Chat</button>
   </nav>
 
