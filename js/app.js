@@ -333,44 +333,47 @@ async function loadData() {
 
 async function saveData(data) {
   const normalizedData = normalizeData(data);
+  // Snapshot the state before updating localStorage. It lets us upload only
+  // records changed by the current user action.
+  const previousData = loadFromLocalStorage();
   saveToLocalStorage(normalizedData);
   console.debug('saveData: saved to localStorage', { customFoodsCount: (normalizedData.customFoods||[]).length });
 
   if (isSupabaseConfigured()) {
     try {
-            const flatEntries = Object.entries(normalizedData.days).flatMap(([date, entries]) =>
+      const toEntryPayload = (entry, date) => ({
+        id: entry.id,
+        date,
+        meal: entry.meal,
+        name: entry.name,
+        kcal: Number(entry.kcal) || 0,
+        protein: Number(entry.protein) || 0,
+        carbs: Number(entry.carbs) || 0,
+        fat: Number(entry.fat) || 0,
+        fiber: Number(entry.fiber) || 0,
+        weight_grams: Number(entry.weightGrams) || 0,
+        unit: entry.unit || 'g',
+        created_at: entry.createdAt ? new Date(entry.createdAt).toISOString() : new Date().toISOString(),
+      });
+      const previousEntries = new Map(
+        Object.entries(previousData.days || {}).flatMap(([date, entries]) =>
+          (entries || []).map((entry) => [entry.id, JSON.stringify(toEntryPayload(entry, date))]),
+        ),
+      );
+      const changedEntries = Object.entries(normalizedData.days).flatMap(([date, entries]) =>
         (entries || []).map((entry) => ({
-          id: entry.id,
-          date,
-          meal: entry.meal,
-          name: entry.name,
-          kcal: Number(entry.kcal) || 0,
-          protein: Number(entry.protein) || 0,
-          carbs: Number(entry.carbs) || 0,
-          fat: Number(entry.fat) || 0,
-          fiber: Number(entry.fiber) || 0,
-          weight_grams: Number(entry.weightGrams) || 0,
-          unit: entry.unit || 'g',
-          created_at: entry.createdAt ? new Date(entry.createdAt).toISOString() : new Date().toISOString(),
+          payload: toEntryPayload(entry, date),
+          previous: previousEntries.get(entry.id),
         }))
+        .filter(({ payload, previous }) => JSON.stringify(payload) !== previous)
+        .map(({ payload }) => payload),
       );
 
-      if (flatEntries.length) {
-        for (const entry of flatEntries) {
-          try {
-            await supabaseRequest('/entries?on_conflict=id', { method: 'POST', body: [entry] });
-          } catch (err) {
-            // fallback: try updating the existing row
-            try {
-              await supabaseRequest(`/entries?id=eq.${encodeURIComponent(entry.id)}`, { method: 'PATCH', body: entry });
-            } catch (e2) {
-              console.warn('Failed to upsert entry', entry.id, err, e2);
-            }
-          }
-        }
+      if (changedEntries.length) {
+        await supabaseRequest('/entries?on_conflict=id', { method: 'POST', body: changedEntries });
       }
 
-      const customFoodsPayload = (normalizedData.customFoods || []).map((food) => ({
+      const toCustomFoodPayload = (food) => ({
         id: food.id,
         name: food.name,
         weight_grams: Number(food.weightGrams) || 100,
@@ -380,25 +383,16 @@ async function saveData(data) {
         carbs: Number(food.carbs) || 0,
         fat: Number(food.fat) || 0,
         fiber: Number(food.fiber) || 0,
-      }));
+      });
+      const previousFoods = new Map(
+        (previousData.customFoods || []).map((food) => [food.id, JSON.stringify(toCustomFoodPayload(food))]),
+      );
+      const changedFoods = (normalizedData.customFoods || [])
+        .map((food) => toCustomFoodPayload(food))
+        .filter((food) => JSON.stringify(food) !== previousFoods.get(food.id));
 
-
-      if (customFoodsPayload.length) {
-        for (const food of customFoodsPayload) {
-          console.debug('saveData: upserting custom food', food.id, food);
-          try {
-            const res = await supabaseRequest('/custom_foods?on_conflict=id', { method: 'POST', body: [food] });
-            console.debug('saveData: custom food POST result', food.id, res);
-          } catch (err) {
-            console.warn('saveData: POST failed, trying PATCH for custom food', food.id, err);
-            try {
-              const pres = await supabaseRequest(`/custom_foods?id=eq.${encodeURIComponent(food.id)}`, { method: 'PATCH', body: food });
-              console.debug('saveData: custom food PATCH result', food.id, pres);
-            } catch (e2) {
-              console.warn('Failed to upsert custom food', food.id, err, e2);
-            }
-          }
-      }
+      if (changedFoods.length) {
+        await supabaseRequest('/custom_foods?on_conflict=id', { method: 'POST', body: changedFoods });
       }
 
       // Save Goals to Supabase
