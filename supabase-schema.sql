@@ -34,14 +34,24 @@ create table if not exists custom_foods (
   fat numeric not null default 0
 );
 
+-- Body weight entries, keyed by day to allow one value per date.
+create table if not exists weight (
+  date text primary key,
+  value numeric not null,
+  period boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
 alter table entries add column if not exists fiber numeric not null default 0;
 alter table custom_foods add column if not exists fiber numeric not null default 0;
 
 alter table entries enable row level security;
 alter table custom_foods enable row level security;
+alter table weight enable row level security;
 
 drop policy if exists "Allow anon read/write on entries" on entries;
 drop policy if exists "Allow anon read/write on custom_foods" on custom_foods;
+drop policy if exists "Allow anon read/write on weight" on weight;
 
 create policy "Allow anon read/write on entries"
   on entries
@@ -51,6 +61,12 @@ create policy "Allow anon read/write on entries"
 
 create policy "Allow anon read/write on custom_foods"
   on custom_foods
+  for all
+  using (true)
+  with check (true);
+
+create policy "Allow anon read/write on weight"
+  on weight
   for all
   using (true)
   with check (true);
