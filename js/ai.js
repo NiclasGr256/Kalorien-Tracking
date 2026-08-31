@@ -19,6 +19,7 @@ export async function callAi(messages, apiKey) {
               fat: { type: 'number' },
               fiber: { type: 'number' },
               weightGrams: { type: 'number' },
+              unit: { type: 'string', enum: ['g', 'ml', 'stk'], description: 'Einheit der Menge' },
               meal: { type: 'string', enum: ['frühstück', 'mittag', 'abend', 'snack'] }
             },
             required: ['date', 'name', 'kcal', 'meal']
@@ -78,6 +79,7 @@ export async function callAi(messages, apiKey) {
             properties: {
               name: { type: 'string' },
               weightGrams: { type: 'number' },
+              unit: { type: 'string', enum: ['g', 'ml', 'stk'], description: 'Einheit der Menge' },
               kcal: { type: 'number' },
               protein: { type: 'number' },
               carbs: { type: 'number' },
@@ -105,6 +107,7 @@ export async function callAi(messages, apiKey) {
               fat: { type: 'number' },
               fiber: { type: 'number' },
               weightGrams: { type: 'number' },
+              unit: { type: 'string', enum: ['g', 'ml', 'stk'], description: 'Einheit der Menge' },
               meal: { type: 'string', enum: ['frühstück', 'mittag', 'abend', 'snack'] }
             },
             required: ['id', 'date']

@@ -1229,20 +1229,6 @@ body.modal-open {
   align-items: center;
 }
 
-.input-with-unit input {
-  flex: 1;
-  padding-right: 44px !important;
-}
-
-.unit-label {
-  position: absolute;
-  right: 14px;
-  color: var(--text-muted);
-  font-weight: 500;
-  pointer-events: none;
-}
-
-
 .field span {
   font-size: 0.8rem;
   color: var(--text-muted);

@@ -529,7 +529,7 @@ const customFoodFiber = document.getElementById('customFoodFiber');
 const customFoodList = document.getElementById('customFoodList');
 const foodName = document.getElementById('foodName');
 const foodWeight = document.getElementById('foodWeight');
-const foodUnitLabel = document.getElementById('foodUnitLabel');
+const foodUnit = document.getElementById('foodUnit');
 const foodKcal = document.getElementById('foodKcal');
 
 const foodProtein = document.getElementById('foodProtein');
@@ -591,6 +591,7 @@ DEINE REGELN:
 4. PRÄZISION: Frage bei ungenauen Angaben ("Ein Brot") nach der Menge oder schätze sie realistisch ein.
 5. BILDANALYSE: Analysiere Bilder von Essen, schätze Portionen und Nährwerte.
 6. BEARBEITEN: Du kannst Einträge mit 'update_entry' ändern, wenn der Nutzer z.B. sagt "Ich habe doch 2 Äpfel gegessen" oder "Ändere das Frühstück von heute auf 500 kcal".
+7. EINHEITEN: Setze bei Stückangaben (z.B. Eier, Bananen oder Scheiben) die Einheit 'stk' und die Anzahl als weightGrams. Nutze sonst 'g' oder 'ml'.
 Nutze die bereitgestellten Tools für alle Aktionen. Antworte immer freundlich auf Deutsch.`
   };
 }
@@ -766,7 +767,7 @@ function fillFoodFromSuggestion(result) {
     unit: result.unit || 'g'
   };
   foodWeight.value = String(selectedFoodBaseNutrition.baseAmount);
-  foodUnitLabel.textContent = selectedFoodBaseNutrition.unit;
+  foodUnit.value = selectedFoodBaseNutrition.unit;
   applySelectedFoodNutrition();
   clearSearchResults();
 }
@@ -1253,7 +1254,7 @@ function openAddModal() {
   renderMealPicker(guessMealByTime());
   foodName.value = '';
   foodWeight.value = '';
-  foodUnitLabel.textContent = 'g';
+  foodUnit.value = 'g';
   foodKcal.value = '';
 
   foodProtein.value = '';
@@ -1277,7 +1278,7 @@ function openEditModal(entry) {
   renderMealPicker(entry.meal);
   foodName.value = entry.name;
   foodWeight.value = String(entry.weightGrams ?? '');
-  foodUnitLabel.textContent = entry.unit || 'g';
+  foodUnit.value = entry.unit || 'g';
   foodKcal.value = String(entry.kcal);
   foodProtein.value = String(entry.protein ?? 0);
   foodCarbs.value = String(entry.carbs ?? 0);
@@ -1317,7 +1318,7 @@ function openCopyModal(entry) {
   renderMealPicker(entry.meal);
   foodName.value = entry.name;
   foodWeight.value = String(entry.weightGrams ?? '');
-  foodUnitLabel.textContent = entry.unit || 'g';
+  foodUnit.value = entry.unit || 'g';
   foodKcal.value = String(entry.kcal);
   foodProtein.value = String(entry.protein ?? 0);
   foodCarbs.value = String(entry.carbs ?? 0);
@@ -1361,7 +1362,7 @@ async function saveEntry(e) {
   const fat = parseNumericValue(foodFat.value);
   const fiber = parseNumericValue(foodFiber.value);
   const weightGrams = Math.max(parseNumericValue(foodWeight.value), 0);
-  const unit = foodUnitLabel.textContent;
+  const unit = foodUnit.value;
   const selectedMeal = normalizeMealValue(mealSelect.value);
   if (!name || !kcal || kcal < 1 || protein < 0 || carbs < 0 || fat < 0 || fiber < 0) return;
 
@@ -2155,6 +2156,7 @@ async function executeTool(toolCall) {
       fat: args.fat || 0,
       fiber: args.fiber || 0,
       weightGrams: args.weightGrams || 100,
+      unit: args.unit || 'g',
       meal: args.meal || 'snack',
       createdAt: Date.now()
     };

@@ -356,13 +356,20 @@
         <div class="search-results hidden" id="foodSearchResults" role="listbox" aria-label="Lebensmittelvorschläge"></div>
       </label>
 
-            <label class="field">
-              <span>Menge</span>
-              <div class="input-with-unit">
+            <div class="field-row">
+              <label class="field">
+                <span>Menge</span>
                 <input type="text" id="foodWeight" placeholder="150" inputmode="decimal" enterkeyhint="done" autocomplete="off">
-                <span id="foodUnitLabel" class="unit-label">g</span>
-              </div>
-            </label>
+              </label>
+              <label class="field">
+                <span>Einheit</span>
+                <select id="foodUnit" class="unit-select" aria-label="Einheit">
+                  <option value="g">Gramm (g)</option>
+                  <option value="stk">Stück (Stk)</option>
+                  <option value="ml">Milliliter (ml)</option>
+                </select>
+              </label>
+            </div>
 
 
 
