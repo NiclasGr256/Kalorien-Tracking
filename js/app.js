@@ -561,6 +561,8 @@ const weightDateSub = document.getElementById('weightDateSub');
 const prevWeightDay = document.getElementById('prevWeightDay');
 const nextWeightDay = document.getElementById('nextWeightDay');
 const weightStatsSummary = document.getElementById('weightStatsSummary');
+const weightStatsStartDate = document.getElementById('weightStatsStartDate');
+const weightStatsEndDate = document.getElementById('weightStatsEndDate');
 const statsStartDate = document.getElementById('statsStartDate');
 const statsEndDate = document.getElementById('statsEndDate');
 const appEl = document.getElementById('app');
@@ -1687,15 +1689,39 @@ async function deleteWeightEntry(date) {
   await renderWeight();
 }
 
+let weightStatsDatesInitialized = false;
+
 async function renderWeightStats() {
+  if (!weightStatsDatesInitialized) {
+    const end = startOfDay(new Date());
+    const start = new Date(end);
+    start.setDate(start.getDate() - 29);
+    weightStatsStartDate.value = dateKey(start);
+    weightStatsEndDate.value = dateKey(end);
+    weightStatsDatesInitialized = true;
+  }
+
   const data = await loadData();
   const weightData = data.weight || {};
-  
+
+  const start = parseDateKey(weightStatsStartDate.value);
+  const end = parseDateKey(weightStatsEndDate.value);
+  const chartCanvas = document.getElementById('weightChart');
+  const validRange = start <= end;
+  chartCanvas.parentElement.classList.toggle('hidden', !validRange);
+  if (weightChart) {
+    weightChart.destroy();
+    weightChart = null;
+  }
+
+  if (!validRange) {
+    weightStatsSummary.innerHTML = '<p class="empty-state">Bitte wähle ein gültiges Start- und Enddatum.</p>';
+    return;
+  }
+
   const daysToShow = [];
-  for (let i = 29; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    daysToShow.push(dateKey(d));
+  for (const day = new Date(start); day <= end; day.setDate(day.getDate() + 1)) {
+    daysToShow.push(dateKey(day));
   }
 
   const values = daysToShow.map(key => weightData[key]?.value || null);
@@ -1705,9 +1731,7 @@ async function renderWeightStats() {
     return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
   });
 
-  if (weightChart) weightChart.destroy();
-
-  weightChart = new Chart(document.getElementById('weightChart'), {
+  weightChart = new Chart(chartCanvas, {
     type: 'line',
     data: {
       labels,
@@ -1766,7 +1790,7 @@ async function renderWeightStats() {
       </div>
     `;
   } else {
-    weightStatsSummary.innerHTML = '<p class="empty-state">Noch keine Gewichtsdaten für die letzten 30 Tage.</p>';
+    weightStatsSummary.innerHTML = '<p class="empty-state">Keine Gewichtsdaten im gewählten Zeitraum.</p>';
   }
 }
 
@@ -2311,6 +2335,8 @@ aiImageInput.addEventListener('change', handleImageSelect);
 aiRemoveImageBtn.addEventListener('click', clearPendingImage);
 statsStartDate.addEventListener('change', () => renderStatistics());
 statsEndDate.addEventListener('change', () => renderStatistics());
+weightStatsStartDate.addEventListener('change', () => renderWeightStats());
+weightStatsEndDate.addEventListener('change', () => renderWeightStats());
 
 prevWeightDay.addEventListener('click', () => {
   selectedWeightDate.setDate(selectedWeightDate.getDate() - 1);

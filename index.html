@@ -272,6 +272,13 @@
         <!-- Weight Statistics -->
         <main class="main view hidden" id="viewWeightStats">
           <div class="stats-container">
+            <div class="stats-header">
+              <div class="date-range-picker">
+                <input type="date" id="weightStatsStartDate" class="stats-date-input" aria-label="Startdatum für den Gewichtsverlauf">
+                <span>bis</span>
+                <input type="date" id="weightStatsEndDate" class="stats-date-input" aria-label="Enddatum für den Gewichtsverlauf">
+              </div>
+            </div>
             <div class="stats-card stats-card--large">
               <h3>Gewichtsverlauf</h3>
               <canvas id="weightChart"></canvas>
